@@ -1,0 +1,101 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* fonts */
+@font-face {
+  font-family: "Philosopher";
+  src: url("/fonts/Philosopher-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Outfit";
+  src: url("/fonts/Outfit-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+
+@theme {
+  --color-primary: #424874;
+  --color-secondary: #F4EEFF;
+  --color-gold: #d4af37;
+  --color-black: #111111;
+  --color-white: #ffffff;
+  --gradient-primary: linear-gradient(135deg, #3b3f63, #6c70a3);
+  --gradient-gold: linear-gradient(135deg, #c9a227, #f5d76e);
+
+  --font-heading: "Philosopher";
+  --font-body: "Outfit";
+}
+@layer utilities {
+  .bg-gradient-primary {
+    background: var(--gradient-primary);
+  }
+
+  .bg-gradient-gold {
+    background: var(--gradient-gold);
+  }
+
+  .animate-marquee {
+    animation-name: marquee;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee {
+    animation: none;
+  }
+}
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+    font-size: 16px;
+    color: var(--color-black);
+    background: var(--color-white);
+
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+  }
+}
+
+
+
+
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  scrollbar-width: none;
+}
+
+* {
+  -ms-overflow-style: none;
+}
+
+
