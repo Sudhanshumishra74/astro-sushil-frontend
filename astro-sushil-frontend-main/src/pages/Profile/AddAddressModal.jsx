@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
-import { useState } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, X, Loader2, Home, Briefcase, AlertCircle } from "lucide-react";
 import { useAuthStore } from "../../store/useAuthStore";
@@ -18,20 +19,52 @@ const slideUp = {
   },
   exit: { opacity: 0, y: 30, transition: { duration: 0.25 } },
 };
-export function AddAddressModal({ isOpen, onClose, onAdd,  }) {
- const { addAddress, loading } = useAuthStore();
+const BLANK_FORM = {
+  name: "",
+  phone: "",
+  addressLine1: "",
+  addressLine2: "",
+  city: "",
+  state: "",
+  pincode: "",
+  type: "Home",
+};
 
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    addressLine1: "",
-    addressLine2: "",
-    city: "",
-    state: "",
-    pincode: "",
-    type: "Home",
-  });
+// `address` (optional) is the address being edited — omitted/null means
+// "add new," the modal's original and only mode. Reused for both since
+// the form/fields are identical; only what gets submitted differs.
+export function AddAddressModal({ isOpen, onClose, onAdd, address }) {
+ const { addAddress, updateAddress, loading } = useAuthStore();
+
+  const [form, setForm] = useState(BLANK_FORM);
   const [errors, setErrors] = useState({});
+
+  // `form`'s useState initializer only runs once — this modal is reused
+  // across opens (add, then edit a different address, etc.), so without
+  // this effect a later open would still show whatever was left over from
+  // the previous one.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (address) {
+      setForm({
+        name: address.fullName || "",
+        phone: address.phone || "",
+        addressLine1: address.addressLine1 || "",
+        addressLine2: address.addressLine2 || "",
+        city: address.city || "",
+        state: address.state || "",
+        pincode: address.pincode || "",
+        type:
+          ["Home", "Work", "Other"].find(
+            (t) => t.toLowerCase() === address.type,
+          ) || "Home",
+      });
+    } else {
+      setForm(BLANK_FORM);
+    }
+    setErrors({});
+  }, [isOpen, address]);
 
   const validate = () => {
     const e = {};
@@ -65,24 +98,19 @@ const handleSubmit = async () => {
 
     type: form.type.toLowerCase(),
 
-    isDefault: false,
+    // Editing shouldn't silently clear default status — setting a new
+    // default is its own explicit action elsewhere, not something this
+    // form does.
+    isDefault: address ? address.isDefault : false,
   };
 
-  const res = await addAddress(payload);
+  const res = address
+    ? await updateAddress(address._id, payload)
+    : await addAddress(payload);
 
   if (res?.success) {
     onClose();
-
-    setForm({
-      name: "",
-      phone: "",
-      addressLine1: "",
-      addressLine2: "",
-      city: "",
-      state: "",
-      pincode: "",
-      type: "Home",
-    });
+    setForm(BLANK_FORM);
   }
 };
   const field = (key, label, placeholder, type = "text", half = false) => (
@@ -134,7 +162,7 @@ const handleSubmit = async () => {
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">
-                  Add New Address
+                  {address ? "Edit Address" : "Add New Address"}
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
                   Fill in your delivery details
@@ -260,6 +288,8 @@ const handleSubmit = async () => {
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" /> Saving…
                   </>
+                ) : address ? (
+                  "Save Changes"
                 ) : (
                   "Save Address"
                 )}

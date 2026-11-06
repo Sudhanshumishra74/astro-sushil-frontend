@@ -207,12 +207,10 @@ export default function FeaturedProducts({
                       rating={product.rating}
                       reviewsCount={product.reviewsCount}
                       hasVariants={product.hasVariants}
+                      soldByRatti={product.soldByRatti}
                       variants={product.variants ?? []}
+                      stock={product.stock}
                       onBook={() => navigate(`/product/${product.slug}`)}
-                      usdPrice={product.priceUSD}
-                      mrpUsdPrice={product.mrpUSD}
-                      isInCart={product.isInCart ?? false}
-                      isWishlisted={product.isInWishlist ?? false}
                     />
                   </SwiperSlide>
                 );

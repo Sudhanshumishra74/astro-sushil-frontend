@@ -249,7 +249,7 @@ export default function BlogDetail() {
                       "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=800"
                     }
                     alt={blog.title}
-                    className="w-full sm:h-80 lg:h-110 object-cover rounded-xl"
+                    className="w-full h-64 sm:h-80 lg:h-110 object-cover rounded-xl"
                     initial={{ scale: 1.06 }}
                     animate={{ scale: 1 }}
                     transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}

@@ -133,12 +133,14 @@ export const useAstrologyStore = create(
           "dashaData",
         ),
 
-      generateMatchMaking: async (params) =>
-        await get().handleRequest(
+      generateMatchMaking: async (params) => {
+        set({ formData: params });
+        return await get().handleRequest(
           "/astrology/match-making",
           params,
           "matchMaking",
-        ),
+        );
+      },
 
       getDailyHoroscope: async (params) =>
         await get().handleRequest(

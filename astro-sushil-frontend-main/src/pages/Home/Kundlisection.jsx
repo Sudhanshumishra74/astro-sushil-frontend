@@ -100,10 +100,10 @@ export default function KundliSection() {
                   whitespace-nowrap hover:bg-gold hover:text-white
                 "
                 aria-label="Chat with Astrologer for Kundli Matching"
-                onClick={() => navigate("/kundli-matching")}
+                onClick={() => navigate("/online-consultations")}
               >
                 {/* <MessageCircle size={15} aria-hidden="true" /> */}
-                Match your Kundli
+                Chat With Astrologer
               </button>
             </motion.div>
           </div>

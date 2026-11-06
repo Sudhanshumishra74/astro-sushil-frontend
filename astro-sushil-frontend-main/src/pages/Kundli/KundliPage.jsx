@@ -55,7 +55,6 @@ export default function KundliPage() {
         title="Free Online Kundli | Accurate Janam Kundli Analysis by Astro Sushil Kumar Singh"
         highlight="Free Online Kundli"
         subtitle="Whether you're navigating career, marriage, or personal growth, your birth chart holds the blueprint to your journey Astro Sushil makes Vedic wisdom effortless with our accurate Free Online Kundli tool, giving you a fast, reliable janam kundli online reading right from home in just a few clicks."
-        ctaBtn="Talk to Astrologer Sushil Kumar Singh"
         breadcrumbs={[
           { label: "Home", href: "/" },
           {

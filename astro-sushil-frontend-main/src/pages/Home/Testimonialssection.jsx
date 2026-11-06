@@ -4,6 +4,9 @@ import { useSettingStore } from "../../store/usSettingStore";
 import { useEffect, useState, useRef } from "react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Pagination, Navigation, A11y, Autoplay } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/pagination";
+import "swiper/css/navigation";
 
 function StarRating({ count = 5 }) {
   return (
@@ -192,7 +195,7 @@ export default function TestimonialsSection() {
             prevSlideMessage: "Previous slide",
             nextSlideMessage: "Next slide",
           }}
-          className="w-full pb-16 overflow-visible"
+          className="w-full flex items-center pb-16 overflow-visible"
         >
           {!loading &&
             testimonials?.map((t, i) => (

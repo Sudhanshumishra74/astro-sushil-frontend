@@ -477,7 +477,7 @@ export default function BookingModal({ consultation, onClose, onConfirm }) {
       dob: form.dob,
       tob: form.tob,
       pob: form.pob,
-      notes: form.notes,
+      note: form.notes,
     };
 
     const bookingRes = await createUserBooking(bookingPayload, token);

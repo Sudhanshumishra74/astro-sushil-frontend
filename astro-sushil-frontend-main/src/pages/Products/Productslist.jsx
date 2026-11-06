@@ -1,23 +1,26 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Search, X, Package } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import PageHero from "../../components/HeroPage";
 import Pagination from "../../components/Pagination";
 import ProductCard2 from "./ProductCard2";
+import CategoryCard from "./CategoryCard";
 import { useProductStore } from "../../store/useProductStore";
+import { useCategoryStore } from "../../store/useCategoryStore";
 import { useAuthStore } from "../../store/useAuthStore";
 import LoginRequiredModal from "../../utils/LoginRequiredModal";
 import Seo from "../../components/Seo";
 import { useWishlistStore } from "../../store/useWishlistStore";
+import { slugifyCategoryName } from "../../utils/categorySlug";
 
 const PAGE_SIZE = 12;
 
 const TABS = [
-  { id: "digital", label: "Digital Products" },
   { id: "physical", label: "Physical Products" },
+  { id: "digital", label: "Digital Products" },
 ];
 
 function getBadge(p) {
@@ -53,23 +56,23 @@ function fmt(n) {
   return `₹${Number(n).toLocaleString("en-IN")}`;
 }
 
-function SearchBar({ value, onChange }) {
+function SearchBar({ value, onChange, onRemove, placeholder = "Search products…" }) {
   return (
     <div className="relative w-full sm:max-w-sm">
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search products…"
-        aria-label="Search products"
+        placeholder={placeholder}
+        aria-label={placeholder}
         className="w-full pl-4 pr-11 py-2.5 rounded-full border-2 border-primary placeholder:text-primary bg-white text-black text-sm font-body shadow-sm focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200"
       />
       {value ? (
         <button
           type="button"
-          onClick={() => onChange("")}
+          onClick={onRemove}
           aria-label="Clear"
-          className="absolute right-px top-[57%] -translate-y-1/2 pointer-events-none bg-primary rounded-full p-3.5 text-white"
+          className="absolute right-px top-[50%] -translate-y-1/2 bg-primary rounded-full p-3.5 text-white cursor-pointer"
         >
           <X size={15} />
         </button>
@@ -105,38 +108,80 @@ export default function ProductsList() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const { user } = useAuthStore();
   const { products, loading, getProducts } = useProductStore();
+  const { topLevelCategories, loading: categoriesLoading, fetchTopLevelCategories } =
+    useCategoryStore();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState("digital");
+  const [activeTab, setActiveTab] = useState("physical");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  useEffect(() => {
-    getProducts({ limit: 1000 });
-    if (user) getWishlist();
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return products.filter((p) => p.type === activeTab);
-    return products.filter(
-      (p) =>
-        p.name?.toLowerCase().includes(q) ||
-        p.shortDescription?.toLowerCase().includes(q) ||
-        p.category?.toLowerCase().includes(q),
-    );
-  }, [products, search, activeTab]);
+  useEffect(() => {
+    if (user) getWishlist();
+  }, [user]);
+
+  // Tab-default browsing — only while there's no active search term.
+  // Digital's default view is a flat product grid (type:"digital");
+  // physical's default view is the category-card browser. Searching
+  // overrides both of these entirely (see the effect below), so this skips
+  // re-fetching on every keystroke once a search is in progress.
+  useEffect(() => {
+    if (search.trim()) return;
+    if (activeTab === "digital") {
+      getProducts({ type: "digital", limit: 1000 });
+    } else {
+      fetchTopLevelCategories();
+    }
+  }, [activeTab, search]);
+
+  // Global search — matches products of *any* type, regardless of which
+  // tab happens to be active. Previously a search only ever looked within
+  // the current tab's own type (the physical tab queried the backend with
+  // type:"physical"; the digital tab client-filtered an already
+  // type:"digital" list), so the same term could show physical results on
+  // one tab and nothing on the other. Tabs are purely a default-browsing
+  // affordance now — typing here always searches everything.
+  useEffect(() => {
+    if (!search.trim()) return;
+
+    const timeout = setTimeout(() => {
+      getProducts({ search: search.trim(), limit: 1000 });
+    }, 350);
+    return () => clearTimeout(timeout);
+  }, [search]);
+
+  const isSearching = search.trim().length > 0;
+
+  // No client-side filtering needed either way — a search comes back
+  // pre-filtered by name from the backend, and the no-search digital grid
+  // is already scoped to type:"digital" server-side.
+  const filteredProducts = products;
 
   const handleSearch = (val) => {
     setSearch(val);
     setPage(1);
   };
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const handleSearchRemove = () => setSearch("");
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    setSearch("");
+    setPage(1);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const paginated = filtered.slice(
+  const paginated = filteredProducts.slice(
     (safePage - 1) * PAGE_SIZE,
     safePage * PAGE_SIZE,
   );
+
+  // Category cards only ever show for the physical tab's own default
+  // (unsearched) view — any active search always shows the flat product
+  // grid instead, on either tab.
+  const showCategoryCards = activeTab === "physical" && !isSearching;
+  const isLoading = showCategoryCards ? categoriesLoading : loading;
 
   return (
     <>
@@ -157,14 +202,14 @@ export default function ProductsList() {
             <div
               className="flex gap-3 flex-wrap"
               role="tablist"
-              aria-label="Consultation types"
+              aria-label="Product types"
             >
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
                   role="tab"
                   aria-selected={activeTab === tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleTabChange(tab.id)}
                   type="button"
                   className={`relative cursor-pointer flex items-center gap-2 px-8 sm:px-10 lg:px-16 py-2.5 rounded-xl font-heading font-semibold text-sm sm:text-lg transition-all duration-700
                     focus-visible:outline-none
@@ -184,7 +229,7 @@ export default function ProductsList() {
                     height={20}
                     loading="lazy"
                     decoding="async"
-                    className="absolute top-2 left-2 -translate-x-1/2 w-8 h-8 object-contain z-5"
+                    className="absolute left-1 sm:top-2 sm:left-2 -translate-x-1/2 sm:w-8 sm:h-8 object-contain z-5"
                   />
                   {tab.label}
                   {activeTab === tab.id && (
@@ -196,99 +241,122 @@ export default function ProductsList() {
                 </button>
               ))}
             </div>
-            <SearchBar value={search} onChange={handleSearch} />
+            <SearchBar
+              value={search}
+              onChange={handleSearch}
+              onRemove={handleSearchRemove}
+              placeholder="Search products…"
+            />
           </div>
 
-          {loading && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4  2xl:grid-cols-5 gap-5 sm:gap-6">
+          {isLoading && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6">
               {Array.from({ length: 8 }).map((_, i) => (
                 <SkeletonCard key={i} />
               ))}
             </div>
           )}
 
-          {!loading && filtered.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center py-24 gap-4"
-            >
-              <div className="w-16 h-16 rounded-full bg-secondary/30 flex items-center justify-center">
-                <Package size={28} className="text-primary/50" />
-              </div>
-              <p className="font-heading text-black/50 text-xl">
-                No products found
-              </p>
-              <p className="text-black/35 text-sm font-body">
-                Try a different search term
-              </p>
-              <button
-                type="button"
-                onClick={() => handleSearch("")}
-                className="mt-2 px-5 py-2 rounded-xl bg-primary text-white text-sm font-body hover:bg-primary/85 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              >
-                Clear search
-              </button>
-            </motion.div>
+          {/* ── Physical, no search: category cards ── */}
+          {!isLoading && showCategoryCards && (
+            <>
+              {topLevelCategories.length === 0 ? (
+                <EmptyState onClear={() => handleSearch("")} search={search} />
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
+                >
+                  {topLevelCategories.map((cat) => (
+                    <CategoryCard
+                      key={cat.name}
+                      name={cat.name}
+                      image={cat.image}
+                      onClick={() =>
+                        navigate(`/products/${slugifyCategoryName(cat.name)}`, {
+                          state: { categoryName: cat.name },
+                        })
+                      }
+                    />
+                  ))}
+                </motion.div>
+              )}
+            </>
           )}
 
-          {!loading && paginated.length > 0 && (
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`${search}-${safePage}`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.3 }}
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
-              >
-                {paginated.map((product, i) => {
-                  const { sale, mrp, usd, mrpUsd } = getPrice(product);
-                  return (
-                    <motion.div
-                      key={product._id}
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.35, delay: i * 0.04 }}
-                    >
-                      <ProductCard2
-                        user={user}
-                        onLoginRequired={() => setShowLoginModal(true)}
-                        _id={product._id}
-                        image={product.thumbnail || product.images?.[0]}
-                        badge={getBadge(product)}
-                        title={product.name}
-                        shortDescription={product.shortDescription}
-                        originalPrice={mrp}
-                        salePrice={sale}
-                        gstType={product.gst?.type}
-                        usdPrice={usd}
-                        mrpUsdPrice={mrpUsd}
-                        type={product.type}
-                        rating={product.rating}
-                        reviewsCount={product.reviewsCount}
-                        hasVariants={product.hasVariants}
-                        variants={product.variants ?? []}
-                        onBook={() => navigate(`/product/${product.slug}`)}
-                      />
-                    </motion.div>
-                  );
-                })}
-              </motion.div>
-            </AnimatePresence>
-          )}
+          {/* ── Digital tab's default view, or an active search on either tab: flat product grid ── */}
+          {!isLoading && !showCategoryCards && (
+            <>
+              {paginated.length === 0 ? (
+                <EmptyState onClear={() => handleSearch("")} search={search} />
+              ) : (
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={`${search}-${safePage}`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
+                  >
+                    {paginated.map((product, i) => {
+                      const { sale, mrp } = getPrice(product);
+                      return (
+                        <motion.div
+                          key={product._id}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.35, delay: i * 0.04 }}
+                        >
+                          <ProductCard2
+                            user={user}
+                            onLoginRequired={() => setShowLoginModal(true)}
+                            _id={product._id}
+                            image={product.thumbnail || product.images?.[0]}
+                            badge={getBadge(product)}
+                            title={product.name}
+                            shortDescription={product.shortDescription}
+                            originalPrice={mrp}
+                            salePrice={sale}
+                            gstType={product.gst?.type}
+                            type={product.type}
+                            rating={product.rating}
+                            reviewsCount={product.reviewsCount}
+                            hasVariants={product.hasVariants}
+                            soldByRatti={product.soldByRatti}
+                            variants={product.variants ?? []}
+                            stock={product.stock}
+                            quality={product.externalMeta?.quality}
+                            origin={product.externalMeta?.origin}
+                            originType={product.externalMeta?.originType}
+                            sku={product.sku}
+                            requiresDetailPage={
+                              product.source === "huelane" &&
+                              product.externalMeta?.pricingModel === "per_weight"
+                            }
+                            onBook={() => navigate(`/product/${product.slug}`)}
+                          />
+                        </motion.div>
+                      );
+                    })}
+                  </motion.div>
+                </AnimatePresence>
+              )}
 
-          {!loading && totalPages > 1 && (
-            <div className="mt-10 sm:mt-12">
-              <Pagination
-                current={safePage}
-                total={totalPages}
-                onChange={(p) => {
-                  setPage(p);
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-              />
-            </div>
+              {totalPages > 1 && (
+                <div className="mt-10 sm:mt-12">
+                  <Pagination
+                    current={safePage}
+                    total={totalPages}
+                    onChange={(p) => {
+                      setPage(p);
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
         <LoginRequiredModal
@@ -300,5 +368,32 @@ export default function ProductsList() {
         />
       </main>
     </>
+  );
+}
+
+function EmptyState({ onClear, search }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex flex-col items-center justify-center py-24 gap-4"
+    >
+      <div className="w-16 h-16 rounded-full bg-secondary/30 flex items-center justify-center">
+        <Package size={28} className="text-primary/50" />
+      </div>
+      <p className="font-heading text-black/50 text-xl">Nothing found</p>
+      {search && (
+        <>
+          <p className="text-black/35 text-sm font-body">Try a different search term</p>
+          <button
+            type="button"
+            onClick={onClear}
+            className="mt-2 px-5 py-2 rounded-xl bg-primary text-white text-sm font-body hover:bg-primary/85 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          >
+            Clear search
+          </button>
+        </>
+      )}
+    </motion.div>
   );
 }

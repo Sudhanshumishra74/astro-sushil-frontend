@@ -16,20 +16,8 @@ import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../../store/useCartStore";
 import { useWishlistStore } from "../../store/useWishlistStore";
 import toast from "react-hot-toast";
-import { useCurrencyStore } from "../../store/useCurrencyStore";
 import { useCurrency } from "../../hooks/useCurrency";
-
-function formatPrice(inrPrice, usdPrice, currency) {
-  if (currency === "USD") {
-    if (!usdPrice) return null;
-    return `$${Number(usdPrice).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  }
-  if (!inrPrice) return null;
-  return `₹${Number(inrPrice).toLocaleString("en-IN")}`;
-}
+import { isVariantOutOfStock } from "../../utils/stock";
 
 export default function ProductCard2({
   user,
@@ -48,14 +36,14 @@ export default function ProductCard2({
   onBook,
   variants = [],
   hasVariants = false,
-  isInCart: initialIsInCart = false,
-  isWishlisted: initialIsWishlisted = false,
+  soldByRatti = false,
+  stock = 0,
+  sku,
 }) {
   const { addToCart, incrementQuantity, decrementQuantity } = useCartStore();
   const { toggleWishlist, isWishlisted } = useWishlistStore();
   const navigate = useNavigate();
   const { convert } = useCurrency();
-  const currency = useCurrencyStore((s) => s.currency);
   const inCart = useCartStore((s) => s.isInCart(_id));
   const qty = useCartStore((s) => s.getProductQuantity(_id));
 
@@ -92,7 +80,33 @@ export default function ProductCard2({
     return null;
   })();
 
+  // A variant with sub-variants isn't directly purchasable — there's no
+  // second picker level on a listing card, so send the customer to the PDP
+  // to finish drilling down instead of firing an incomplete variantId-only
+  // add-to-cart. A gemstone (soldByRatti) has no card-level picker at all —
+  // it always needs the PDP's ratti selector.
+  const needsSubVariant =
+    (hasVariants && selectedVariant?.subVariants?.length > 0) || soldByRatti;
+
+  // Digital/service products aren't inventory-tracked — `stock` defaults to
+  // 0 for every type, so gating on it here would show every digital product
+  // as permanently out of stock.
+  const isOutOfStock =
+    type !== "physical"
+      ? false
+      : hasVariants
+        ? selectedVariant
+          ? isVariantOutOfStock(selectedVariant)
+          : false
+        : stock <= 0;
+
   const handleAddToCart = async () => {
+    if (isOutOfStock) return;
+    if (needsSubVariant) {
+      toast("Select options to continue");
+      onBook?.();
+      return;
+    }
     if (!user) {
       onLoginRequired?.();
       return;
@@ -119,6 +133,12 @@ export default function ProductCard2({
   };
 
   const handleBuyNow = async () => {
+    if (isOutOfStock) return;
+    if (needsSubVariant) {
+      toast("Select options to continue");
+      onBook?.();
+      return;
+    }
     if (!user) {
       onLoginRequired?.();
       return;
@@ -200,6 +220,11 @@ export default function ProductCard2({
               {badge}
             </span>
           )}
+          {isOutOfStock && (
+            <span className="px-2.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-body font-medium shadow-sm">
+              Out of Stock
+            </span>
+          )}
         </div>
 
         <span
@@ -247,6 +272,10 @@ export default function ProductCard2({
           {title}
         </h3>
 
+        {sku && (
+          <p className="text-black/35 text-[10.5px] font-body -mt-2">SKU: {sku}</p>
+        )}
+
         {hasVariants && Object.keys(variantGroups).length > 0 && (
           <div className="flex flex-col gap-2">
             {Object.entries(variantGroups).map(([groupName, groupVariants]) => (
@@ -257,7 +286,7 @@ export default function ProductCard2({
                 <div className="flex flex-wrap gap-1.5">
                   {groupVariants.map((v) => {
                     const isSelected = selectedVariant?._id === v._id;
-                    const outOfStock = v.stock === 0;
+                    const outOfStock = isVariantOutOfStock(v);
                     return (
                       <button
                         key={v._id}
@@ -310,6 +339,9 @@ export default function ProductCard2({
                 Price on selection
               </span>
             )}
+            {soldByRatti && (displaySalePrice || displayOriginalPrice) && (
+              <span className="text-black/45 text-[11px] font-body">/ ratti</span>
+            )}
           </div>
           {(displaySalePrice || displayOriginalPrice) && (
             <span className="text-black/35 text-[10.5px] font-body">
@@ -321,7 +353,15 @@ export default function ProductCard2({
         </div>
 
         <div className="flex gap-2 mt-auto">
-          {inCart ? (
+          {isOutOfStock && !inCart ? (
+            <button
+              type="button"
+              disabled
+              className="flex-1 py-3 rounded-md border border-black/10 bg-black/5 text-black/35 font-body text-sm font-medium flex items-center justify-center gap-1.5 cursor-not-allowed"
+            >
+              Out of Stock
+            </button>
+          ) : inCart ? (
             <motion.div
               key="qty-controls"
               initial={{ opacity: 0, scale: 0.9 }}
@@ -394,17 +434,20 @@ export default function ProductCard2({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleBuyNow();
-            }}
-            className="flex-1 py-3 rounded-md cursor-pointer bg-primary hover:bg-gold text-white font-body text-sm font-medium flex items-center justify-center gap-1.5 active:scale-[0.97] transition-all duration-700 shadow-md shadow-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          >
-            {/* <Zap size={12} /> */}
-            Buy Now
-          </button>
+          {!(isOutOfStock && !inCart) && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleBuyNow();
+              }}
+              disabled={isOutOfStock}
+              className="flex-1 py-3 rounded-md cursor-pointer bg-primary hover:bg-gold text-white font-body text-sm font-medium flex items-center justify-center gap-1.5 active:scale-[0.97] transition-all duration-700 shadow-md shadow-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary disabled:shadow-none"
+            >
+              {/* <Zap size={12} /> */}
+              Buy Now
+            </button>
+          )}
         </div>
       </div>
     </div>

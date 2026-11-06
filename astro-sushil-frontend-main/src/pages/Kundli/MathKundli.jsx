@@ -1,8 +1,8 @@
 /* eslint-disable no-unused-vars */
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Users, User } from "lucide-react";
+import { Users, User, MapPin, Loader2, Check } from "lucide-react";
 import PageHero from "../../components/HeroPage";
 import { toast } from "react-hot-toast";
 import { useAstrologyStore } from "../../store/useAstrologyStore";
@@ -31,12 +31,22 @@ const inputClass =
 const labelClass =
   "block text-sm font-medium text-primary mb-1.5 tracking-wide";
 
-const defaultBoy = { name: "", dob: "", time: "", place: "", gender: "male" };
+const defaultBoy = {
+  name: "",
+  dob: "",
+  time: "",
+  place: "",
+  latitude: "",
+  longitude: "",
+  gender: "male",
+};
 const defaultGirl = {
   name: "",
   dob: "",
   time: "",
   place: "",
+  latitude: "",
+  longitude: "",
   gender: "female",
 };
 
@@ -379,7 +389,45 @@ function MatchWhyChooseCard({ feature, delay }) {
 
 // ─── PersonForm ───────────────────────────────────────────────────────────────
 function PersonForm({ form, setForm }) {
+  const { getGeoDetails } = useAstrologyStore();
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  const [suggestions, setSuggestions] = useState([]);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const debounceRef = useRef(null);
+
+  const handlePlaceChange = (e) => {
+    const val = e.target.value;
+    setForm((p) => ({ ...p, place: val, latitude: "", longitude: "" }));
+    setSuggestions([]);
+    setShowDropdown(false);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (val.trim().length < 2) return;
+
+    debounceRef.current = setTimeout(async () => {
+      setGeoLoading(true);
+      const res = await getGeoDetails({ place: val.trim() });
+      setGeoLoading(false);
+      if (res.success && res.data?.length) {
+        setSuggestions(res.data);
+        setShowDropdown(true);
+      }
+    }, 400);
+  };
+
+  const handleSelect = (item) => {
+    setForm((p) => ({
+      ...p,
+      place: item.formattedAddress,
+      latitude: String(item.location.latitude),
+      longitude: String(item.location.longitude),
+    }));
+    setShowDropdown(false);
+    setSuggestions([]);
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -410,15 +458,54 @@ function PersonForm({ form, setForm }) {
           className={inputClass}
         />
       </div>
-      <div>
+      <div className="relative">
         <label className={labelClass}>Birth Place</label>
-        <input
-          type="text"
-          value={form.place}
-          onChange={set("place")}
-          placeholder="e.g. Delhi, India"
-          className={inputClass}
-        />
+        <div className="relative">
+          <input
+            type="text"
+            value={form.place}
+            onChange={handlePlaceChange}
+            onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+            onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
+            placeholder="Search city or place..."
+            autoComplete="off"
+            className={`${inputClass} pr-9`}
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            {geoLoading ? (
+              <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+            ) : form.latitude ? (
+              <Check className="w-3.5 h-3.5 text-green-500" />
+            ) : (
+              <MapPin className="w-3.5 h-3.5 text-black/25" />
+            )}
+          </div>
+        </div>
+
+        <AnimatePresence>
+          {showDropdown && suggestions.length > 0 && (
+            <motion.ul
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.15 }}
+              className="absolute z-50 w-full mt-1.5 bg-white border border-secondary rounded-xl shadow-xl overflow-hidden max-h-56 overflow-y-auto"
+            >
+              {suggestions.map((item, i) => (
+                <li
+                  key={i}
+                  onMouseDown={() => handleSelect(item)}
+                  className="px-4 py-2.5 flex items-start gap-2.5 hover:bg-secondary/40 cursor-pointer border-b border-secondary/60 last:border-0 transition-colors list-none"
+                >
+                  <MapPin className="w-3 h-3 text-primary/40 shrink-0 mt-0.5" />
+                  <span className="text-xs text-black/70 leading-relaxed">
+                    {item.formattedAddress}
+                  </span>
+                </li>
+              ))}
+            </motion.ul>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -460,6 +547,13 @@ function KundliMatchCard() {
         return false;
       }
 
+      if (!form.latitude || !form.longitude) {
+        toast.error(
+          `Please select ${label.toLowerCase()}'s birth place from the suggestions.`,
+        );
+        return false;
+      }
+
       return true;
     };
 
@@ -483,21 +577,27 @@ function KundliMatchCard() {
     const girlTime = parseTime(girlForm.time);
 
     const params = {
-      male_lat: 28.6139,
-      male_long: 77.209,
+      male_lat: boyForm.latitude,
+      male_long: boyForm.longitude,
       male_dob: formatDob(boyForm.dob),
       male_hour: boyTime.hour,
       male_min: boyTime.min,
       male_name: boyForm.name.trim(),
 
-      female_lat: 19.076,
-      female_long: 72.8777,
+      female_lat: girlForm.latitude,
+      female_long: girlForm.longitude,
       female_dob: formatDob(girlForm.dob),
       female_hour: girlTime.hour,
       female_min: girlTime.min,
       female_name: girlForm.name.trim(),
 
-      label: "match_ashtakoot_points",
+      // The vendor only returns the report sections listed here — the report
+      // page renders all of these, so every one has to be requested or its
+      // section silently comes back empty (e.g. match_percentage missing
+      // means every score ring shows 0%, even though ashtakoota itself is
+      // fully populated when it's the only label requested).
+      label:
+        "match_birth_details,match_ashtakoot_points,match_astro_details,match_percentage,match_making_report,match_obstructions,match_dashakoot_points,match_manglik_report,match_planet_details",
     };
 
     const result = await generateMatchMaking(params);
@@ -1150,7 +1250,6 @@ export default function KundliMatch() {
         title="Kundli Matching for Marriage | Online Kundali Matching by Date of Birth"
         highlight="Online Kundali Matching"
         subtitle="Whether you are checking 36 Gunas or analyzing Manglik Dosha, Astro Sushil brings you fast, trustworthy kundali matching for marriage Get detailed compatibility insights in seconds using exact birth details."
-        ctaBtn="Talk to Astrologer Sushil Kumar Singh"
         breadcrumbs={[
           { label: "Home", href: "/" },
           {

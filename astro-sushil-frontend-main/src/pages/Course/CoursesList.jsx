@@ -13,7 +13,7 @@ const PAGE_SIZE = 8;
 
 const fmt = (n) => (n ? `₹${Number(n).toLocaleString("en-IN")}` : null);
 
-function SearchBar({ value, onChange }) {
+function SearchBar({ value, onChange, onRemove }) {
   return (
     <div className="relative w-full sm:max-w-sm">
       <input
@@ -27,9 +27,9 @@ function SearchBar({ value, onChange }) {
       {value ? (
         <button
           type="button"
-          onClick={() => onChange("")}
+          onClick={onRemove}
           aria-label="Clear"
-          className="absolute right-px top-[57%] -translate-y-1/2 pointer-events-none bg-primary rounded-full p-3.5 text-white"
+          className="absolute right-px top-[50%] -translate-y-1/2 cursor-pointer bg-primary rounded-full p-3.5 text-white"
         >
           <X size={15} />
         </button>
@@ -37,7 +37,7 @@ function SearchBar({ value, onChange }) {
         <button
           type="button"
           aria-label="Search"
-          className="absolute right-px top-[57%] -translate-y-1/2 pointer-events-none bg-primary rounded-full p-3.5 text-white"
+          className="absolute right-px top-[50%] -translate-y-1/2 pointer-events-none bg-primary rounded-full p-3.5 text-white"
         >
           <Search size={15} />
         </button>
@@ -118,7 +118,7 @@ export default function CoursesPage() {
                   ? "No courses found"
                   : `Showing ${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filtered.length)} of ${filtered.length} courses`}
             </p> */}
-            <SearchBar value={search} onChange={handleSearch} />
+            <SearchBar value={search} onChange={handleSearch} onRemove={() => setSearch("")} />
           </div>
 
           {loading && (
