@@ -121,6 +121,36 @@ const LoginPrompt = ({ navigate }) => (
   </motion.div>
 );
 
+// A product's variant/sub-variant selection — snapshotted onto the cart
+// item as human-readable name+value pairs (cart.controler.js's addToCart)
+// specifically so it's displayable here: variantId alone gives this
+// component nothing displayable without re-fetching the product.
+const VariantSelectionTags = ({ item }) => {
+  const tags = [
+    item.variantName ? `${item.variantName}: ${item.variantValue}` : null,
+    item.subVariantName ? `${item.subVariantName}: ${item.subVariantValue}` : null,
+    item.selectedRatti ? `${item.selectedRatti} ratti` : null,
+    item.certificateName
+      ? `${item.certificateName}${item.certificateIncludedInPrice ? "" : ` (+₹${item.certificatePrice})`}`
+      : null,
+  ].filter(Boolean);
+
+  if (!tags.length) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="text-[10px] font-body text-primary bg-secondary/40 px-2 py-0.5 rounded-full"
+        >
+          {tag}
+        </span>
+      ))}
+    </div>
+  );
+};
+
 /* ── Cart item: mobile-first stacked layout ── */
 const CartItem = ({ item, onIncrement, onDecrement, onRemove }) => {
   const { convert } =
@@ -132,6 +162,7 @@ const CartItem = ({ item, onIncrement, onDecrement, onRemove }) => {
   const total     = item.total     || price * item.quantity;
   const productId = item.product;
   const variantId = item.variantId;
+  const itemId    = item._id;
   const hasDiscount = mrp > price;
 
   return (
@@ -168,12 +199,20 @@ const CartItem = ({ item, onIncrement, onDecrement, onRemove }) => {
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
-            onClick={() => onRemove(productId, variantId)}
+            onClick={() => onRemove(productId, variantId, itemId)}
             className="w-7 h-7 rounded-xl flex items-center justify-center hover:text-red-500 hover:bg-red-50 transition-all shrink-0"
           >
             <Trash2 size={13} className="text-red-400" />
           </motion.button>
         </div>
+
+        {item.isUnavailable && (
+          <p className="text-[11px] font-body font-semibold text-red-500">
+            No longer available — please remove this item to check out.
+          </p>
+        )}
+
+        <VariantSelectionTags item={item} />
 
         {/* Unit price */}
         <div className="flex items-baseline gap-1.5 flex-wrap">
@@ -186,26 +225,44 @@ const CartItem = ({ item, onIncrement, onDecrement, onRemove }) => {
             </span>
           )}
           <span className="text-[10px] font-body text-black/30">/ unit</span>
+          {item.taxRate > 0 && (
+            <span className="text-[10px] font-body text-black/35">
+              · GST {item.taxRate}%
+            </span>
+          )}
         </div>
 
         {/* Qty controls + line total */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <QtyBtn onClick={() => onDecrement(productId, variantId)}>
-              <Minus size={10} />
-            </QtyBtn>
-            <motion.span
-              key={item.quantity}
-              initial={{ scale: 1.25, color: "var(--color-primary)" }}
-              animate={{ scale: 1, color: "#111827" }}
-              transition={{ duration: 0.18 }}
-              className="w-5 text-center text-sm font-bold font-body tabular-nums"
-            >
-              {item.quantity}
-            </motion.span>
-            <QtyBtn onClick={() => onIncrement(productId, variantId)}>
-              <Plus size={10} />
-            </QtyBtn>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
+              <QtyBtn
+                onClick={() => onDecrement(productId, variantId, itemId)}
+                disabled={item.isUnavailable}
+              >
+                <Minus size={10} />
+              </QtyBtn>
+              <motion.span
+                key={item.quantity}
+                initial={{ scale: 1.25, color: "var(--color-primary)" }}
+                animate={{ scale: 1, color: "#111827" }}
+                transition={{ duration: 0.18 }}
+                className="w-5 text-center text-sm font-bold font-body tabular-nums"
+              >
+                {item.quantity}
+              </motion.span>
+              <QtyBtn
+                onClick={() => onIncrement(productId, variantId, itemId)}
+                disabled={item.isUniqueInventory || item.isUnavailable}
+                title={item.isUniqueInventory ? "One-of-a-kind item — only 1 available" : undefined}
+              >
+                <Plus size={10} />
+              </QtyBtn>
+            </div>
+
+            {item.isUniqueInventory && (
+              <p className="text-[10px] text-black/35 font-body">One of a kind — only 1 available</p>
+            )}
           </div>
 
           <p className="text-sm font-heading font-bold text-primary shrink-0">
@@ -237,12 +294,16 @@ const CartPage = () => {
 
   const items      = cart?.items    ?? (Array.isArray(cart) ? cart : []);
   const subtotal   = cart?.subTotal ?? items.reduce((s, i) => s + (i.total || 0), 0);
-  const shipping   = cart?.shipping ?? (subtotal > 499 ? 0 : 49);
   const discount   = cart?.discount ?? 0;
   const tax        = cart?.tax ?? 0;
-  const grandTotal = cart?.totalAmount ?? subtotal + shipping - discount + tax;
+  // Shipping is deliberately not shown (or included in this total) on the
+  // cart page — there's no delivery address yet, so any number here would
+  // only ever be a flat guess; the real, address-dependent charge only
+  // exists once the customer reaches checkout (CheckoutPage2.jsx).
+  const grandTotal = subtotal - discount + tax;
   const itemCount  = items.reduce((s, i) => s + i.quantity, 0);
   const isEmpty    = !loading && items.length === 0;
+  const hasUnavailableItem = items.some((i) => i.isUnavailable);
 
   return (
     <>
@@ -302,7 +363,7 @@ const CartPage = () => {
                   <AnimatePresence mode="popLayout">
                     {items.map((item) => (
                       <CartItem
-                        key={`${item.product}-${item.variantId}`}
+                        key={item._id || `${item.product}-${item.variantId}`}
                         item={item}
                         onIncrement={incrementQuantity}
                         onDecrement={decrementQuantity}
@@ -375,7 +436,6 @@ const CartPage = () => {
                   {[
                     { label: `Subtotal (${itemCount} items)`, value: convert(subtotal) },
                     discount > 0 && { label: "Discount", value: `−${convert(discount)}`, green: true },
-                    { label: `Shipping${shipping === 0 ? " (Free)" : ""}`, value: shipping === 0 ? "Free" : convert(shipping), green: shipping === 0 },
                     tax > 0 && { label: "GST", value: convert(tax) },
                   ].filter(Boolean).map(({ label, value, green }) => (
                     <div key={label} className="flex justify-between items-center gap-3 text-sm">
@@ -401,11 +461,17 @@ const CartPage = () => {
                 </div>
 
                 <div className="px-4 sm:px-6 pb-5 sm:pb-6 space-y-3">
+                  {hasUnavailableItem && (
+                    <p className="text-xs font-body text-red-500 text-center">
+                      Remove the unavailable item(s) above to check out.
+                    </p>
+                  )}
                   <motion.button
-                    whileHover={{ scale: 1.02, boxShadow: "0 12px 32px rgba(0,0,0,0.15)" }}
-                    whileTap={{ scale: 0.97 }}
+                    whileHover={hasUnavailableItem ? {} : { scale: 1.02, boxShadow: "0 12px 32px rgba(0,0,0,0.15)" }}
+                    whileTap={hasUnavailableItem ? {} : { scale: 0.97 }}
                     onClick={() => navigate("/checkout")}
-                    className="w-full py-3.5 sm:py-4 bg-primary hover:bg-primary/85 text-white font-heading font-bold rounded-2xl text-sm sm:text-base flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-colors"
+                    disabled={hasUnavailableItem}
+                    className="w-full py-3.5 sm:py-4 bg-primary hover:bg-primary/85 text-white font-heading font-bold rounded-2xl text-sm sm:text-base flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary"
                   >
                     Proceed to Checkout <ArrowRight size={15} />
                   </motion.button>

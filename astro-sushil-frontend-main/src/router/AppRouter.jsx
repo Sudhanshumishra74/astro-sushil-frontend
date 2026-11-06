@@ -19,6 +19,7 @@ const AboutUs = lazy(() => import("../pages/Aboutus/AboutUs"));
 const CoursesPage = lazy(() => import("../pages/Course/CoursesList"));
 const CartPage = lazy(() => import("../pages/Cart/CartPage"));
 const Productslist = lazy(() => import("../pages/Products/Productslist"));
+const CategoryListing = lazy(() => import("../pages/Products/CategoryListing"));
 const ProductDetailPage = lazy(
   () => import("../pages/Products/Productdetailpage"),
 );
@@ -95,6 +96,7 @@ export default function AppRouter() {
             />
             <Route path="/product" element={<Navigate to="/products/" replace />} />
             <Route path="/products/" element={<Productslist />} />
+            <Route path="/products/:categorySlug" element={<CategoryListing />} />
             <Route path="/shop/" element={<Shop />} />
             <Route path="/product/:slug" element={<ProductDetailPage />} />
             <Route

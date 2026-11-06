@@ -119,7 +119,7 @@ export default function DownloadsSection() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {paginated.map((item, i) => (
               <DownloadCard
                 key={item._id || i}

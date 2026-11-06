@@ -1,4 +1,6 @@
 import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAstrologyStore } from "../../store/useAstrologyStore";
 
 const loadScript = (src) =>
   new Promise((resolve, reject) => {
@@ -21,394 +23,14 @@ const captureEl = (el) =>
     windowHeight: el.scrollHeight,
   });
 
-const data = {
-  match_birth_details: {
-    male_astro_details: {
-      year: 2012,
-      month: 1,
-      day: 11,
-      hour: 13,
-      minute: 13,
-      latitude: 28.5355161,
-      longitude: 77.3910265,
-      timezone: 5.5,
-      sunrise: "7:14:14",
-      sunset: "17:41:59",
-    },
-    female_astro_details: {
-      year: 2011,
-      month: 2,
-      day: 14,
-      hour: 12,
-      minute: 13,
-      latitude: 28.7040592,
-      longitude: 77.10249019999999,
-      timezone: 5.5,
-      sunrise: "7:1:15",
-      sunset: "18:10:36",
-    },
-  },
-  match_ashtakoot_points: {
-    varna: {
-      description: "Natural Refinement / Work",
-      male_koot_attribute: "Vipra",
-      female_koot_attribute: "Shoodra",
-      total_points: 1,
-      received_points: 1,
-    },
-    vashya: {
-      description: "Innate Giving / Attraction",
-      male_koot_attribute: "Jalchar",
-      female_koot_attribute: "Maanav",
-      total_points: 2,
-      received_points: 0.5,
-    },
-    tara: {
-      description: "Comfort - Prosperity - Health",
-      male_koot_attribute: "Ashlesha",
-      female_koot_attribute: "Mrigshira",
-      total_points: 3,
-      received_points: 1.5,
-    },
-    yoni: {
-      description: "Intimate Physical",
-      male_koot_attribute: "Marjaar",
-      female_koot_attribute: "Sarp",
-      total_points: 4,
-      received_points: 1,
-    },
-    maitri: {
-      description: "Friendship",
-      male_koot_attribute: "Moon",
-      female_koot_attribute: "Mercury",
-      total_points: 5,
-      received_points: 1,
-    },
-    gan: {
-      description: "Temperament",
-      male_koot_attribute: "Rakshasa",
-      female_koot_attribute: "Dev",
-      total_points: 6,
-      received_points: 1,
-    },
-    bhakut: {
-      description: "Constructive Ability / Society",
-      male_koot_attribute: "Cancer",
-      female_koot_attribute: "Gemini",
-      total_points: 7,
-      received_points: 0,
-    },
-    nadi: {
-      description: "Progeny / Excess",
-      male_koot_attribute: "Ant",
-      female_koot_attribute: "Madhya",
-      total_points: 8,
-      received_points: 8,
-    },
-    total: { total_points: 36, received_points: 14, minimum_required: 18 },
-    conclusion: {
-      status: false,
-      report:
-        "Ashtakoota matching is only 14 points out of 36 points. Please consider all other things mentioned in kundali.",
-    },
-  },
-  match_astro_details: {
-    male_astro_details: {
-      ascendant: "Aries",
-      Varna: "Vipra",
-      Vashya: "Jalchar",
-      Yoni: "Marjaar",
-      Gan: "Rakshasa",
-      Nadi: "Ant",
-      SignLord: "Moon",
-      sign: "Cancer",
-      Naksahtra: "Ashlesha",
-      NaksahtraLord: "Mercury",
-      Charan: 2,
-      Yog: "Priti",
-      Karan: "Vanija",
-      Tithi: "Krishna Tritiya",
-      tatva: "Water",
-      paya: "Silver",
-    },
-    female_astro_details: {
-      ascendant: "Taurus",
-      Varna: "Shoodra",
-      Vashya: "Maanav",
-      Yoni: "Sarp",
-      Gan: "Dev",
-      Nadi: "Madhya",
-      SignLord: "Mercury",
-      sign: "Gemini",
-      Naksahtra: "Mrigshira",
-      NaksahtraLord: "Mars",
-      Charan: 4,
-      Yog: "Vishkumbha",
-      Karan: "Vanija",
-      Tithi: "Shukla-Ekadashi",
-      tatva: "Air",
-      paya: "Iron",
-    },
-  },
-  match_percentage: {
-    ashtakoota_percentage: 39,
-    manglik_match_percentage: 78,
-    rajju_match_percentage: 100,
-    vedha_match_percentage: 100,
-    match_percentage: 69,
-    is_match_good: true,
-  },
-  match_making_report: {
-    ashtakoota: { status: false, received_points: 14 },
-    manglik: { status: true, male_percentage: 18.75, female_percentage: 20.25 },
-    rajju_dosha: { status: false },
-    vedha_dosha: { status: false },
-    conclusion: {
-      match_report:
-        "Though the Ashtakoota matching points are quite less, the remaining factors are indicating positive results. Hence, you are advised to consult an astrologer before going ahead with this alliance.",
-    },
-  },
-  match_obstructions: {
-    is_present: false,
-    vedha_report:
-      "The Nakshatras of male and female does not belong to Vedha Kutir pair and therefore no Vedha dosha.",
-  },
-  match_dashakoot_points: {
-    dina: {
-      male_koot_attribute: "Ashlesha",
-      female_koot_attribute: "Mrigshira",
-      total_points: 3,
-      received_points: 0,
-    },
-    gana: {
-      male_koot_attribute: "Rakshasa",
-      female_koot_attribute: "Dev",
-      total_points: 4,
-      received_points: 0,
-    },
-    yoni: {
-      male_koot_attribute: "Marjaar",
-      female_koot_attribute: "Sarp",
-      total_points: 4,
-      received_points: 0,
-    },
-    rashi: {
-      male_koot_attribute: "Cancer",
-      female_koot_attribute: "Gemini",
-      total_points: 7,
-      received_points: 0,
-    },
-    rasyadhipati: {
-      male_koot_attribute: "Moon",
-      female_koot_attribute: "Mercury",
-      total_points: 5,
-      received_points: 1,
-    },
-    rajju: {
-      male_koot_attribute: "-",
-      female_koot_attribute: "-",
-      total_points: 5,
-      received_points: 5,
-    },
-    vedha: {
-      male_koot_attribute: "Ashlesha",
-      female_koot_attribute: "Mrigshira",
-      total_points: 2,
-      received_points: 2,
-    },
-    vashya: {
-      male_koot_attribute: "Jalchar",
-      female_koot_attribute: "Maanav",
-      total_points: 2,
-      received_points: 0.5,
-    },
-    mahendra: {
-      male_koot_attribute: "Ashlesha",
-      female_koot_attribute: "Mrigshira",
-      total_points: 2,
-      received_points: 0,
-    },
-    streeDeergha: {
-      male_koot_attribute: "Ashlesha",
-      female_koot_attribute: "Mrigshira",
-      total_points: 2,
-      received_points: 0,
-    },
-    total: { total_points: 36, received_points: 8.5, minimum_required: 18 },
-  },
-  match_manglik_report: {
-    male: {
-      manglik_status: "INEFFECTIVE",
-      percentage_manglik_present: 18.75,
-      is_mars_manglik_cancelled: true,
-      is_present: false,
-      manglik_report:
-        "Manglik Dosha is present, but it is very weak and has little to no impact. So, you are not considered Manglik.",
-    },
-    female: {
-      manglik_status: "INEFFECTIVE",
-      percentage_manglik_present: 20.25,
-      is_mars_manglik_cancelled: false,
-      is_present: false,
-      manglik_report:
-        "Manglik Dosha is present, but it is very weak and has little to no impact. So, you are not considered Manglik.",
-    },
-    conclusion: {
-      match: true,
-      report:
-        "The boy is not a Manglik; nor is the girl a Manglik. Mangal Dosha being absent in either horoscopes, there shall be no ill effect on their marriage. This match is recommended.",
-    },
-  },
-  match_planet_details: {
-    male_planet_details: [
-      {
-        name: "Sun",
-        sign: "Sagittarius",
-        nakshatra: "Purva Shadha",
-        house: 9,
-        isRetro: "false",
-        planet_awastha: "Mrit",
-      },
-      {
-        name: "Moon",
-        sign: "Cancer",
-        nakshatra: "Ashlesha",
-        house: 4,
-        isRetro: "false",
-        planet_awastha: "Kumara",
-      },
-      {
-        name: "Mars",
-        sign: "Leo",
-        nakshatra: "Uttra Phalguni",
-        house: 5,
-        isRetro: "false",
-        planet_awastha: "Mrit",
-      },
-      {
-        name: "Mercury",
-        sign: "Sagittarius",
-        nakshatra: "Mool",
-        house: 9,
-        isRetro: "false",
-        planet_awastha: "Kumara",
-      },
-      {
-        name: "Jupiter",
-        sign: "Aries",
-        nakshatra: "Ashwini",
-        house: 1,
-        isRetro: "false",
-        planet_awastha: "Kumara",
-      },
-      {
-        name: "Venus",
-        sign: "Aquarius",
-        nakshatra: "Dhanishtha",
-        house: 11,
-        isRetro: "false",
-        planet_awastha: "Bala",
-      },
-      {
-        name: "Saturn",
-        sign: "Libra",
-        nakshatra: "Chitra",
-        house: 7,
-        isRetro: "false",
-        planet_awastha: "Bala",
-      },
-      {
-        name: "Rahu",
-        sign: "Scorpio",
-        nakshatra: "Jyeshtha",
-        house: 8,
-        isRetro: "true",
-        planet_awastha: "Kumara",
-      },
-      {
-        name: "Ketu",
-        sign: "Taurus",
-        nakshatra: "Rohini",
-        house: 2,
-        isRetro: "true",
-        planet_awastha: "Kumara",
-      },
-    ],
-    female_planet_details: [
-      {
-        name: "Sun",
-        sign: "Aquarius",
-        nakshatra: "Dhanishtha",
-        house: 10,
-        isRetro: "false",
-        planet_awastha: "Bala",
-      },
-      {
-        name: "Moon",
-        sign: "Gemini",
-        nakshatra: "Mrigshira",
-        house: 2,
-        isRetro: "false",
-        planet_awastha: "Kumara",
-      },
-      {
-        name: "Mars",
-        sign: "Capricorn",
-        nakshatra: "Dhanishtha",
-        house: 9,
-        isRetro: "false",
-        planet_awastha: "Bala",
-      },
-      {
-        name: "Mercury",
-        sign: "Capricorn",
-        nakshatra: "Shravan",
-        house: 9,
-        isRetro: "false",
-        planet_awastha: "Kumara",
-      },
-      {
-        name: "Jupiter",
-        sign: "Pisces",
-        nakshatra: "Uttra Bhadrapad",
-        house: 11,
-        isRetro: "false",
-        planet_awastha: "Vridha",
-      },
-      {
-        name: "Venus",
-        sign: "Sagittarius",
-        nakshatra: "Purva Shadha",
-        house: 8,
-        isRetro: "false",
-        planet_awastha: "Yuva",
-      },
-      {
-        name: "Saturn",
-        sign: "Virgo",
-        nakshatra: "Hast",
-        house: 5,
-        isRetro: "true",
-        planet_awastha: "Kumara",
-      },
-      {
-        name: "Rahu",
-        sign: "Sagittarius",
-        nakshatra: "Mool",
-        house: 8,
-        isRetro: "true",
-        planet_awastha: "Bala",
-      },
-      {
-        name: "Ketu",
-        sign: "Gemini",
-        nakshatra: "Mrigshira",
-        house: 2,
-        isRetro: "true",
-        planet_awastha: "Bala",
-      },
-    ],
-  },
+const MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+const formatBirthDate = (bd) => {
+  if (!bd?.day || !bd?.month || !bd?.year) return "-";
+  return `${bd.day} ${MONTH_NAMES[bd.month - 1] || ""} ${bd.year}`.trim();
 };
 
 const ashtakootRows = [
@@ -446,7 +68,7 @@ const planetIcons = {
 };
 
 function ScoreBar({ received, total }) {
-  const pct = Math.round((received / total) * 100);
+  const pct = total > 0 ? Math.round((received / total) * 100) : 0;
   const good = pct >= 50;
   return (
     <div className="flex items-center gap-2 mt-1">
@@ -487,7 +109,7 @@ function StatusPill({ ok, label }) {
   );
 }
 
-function RingChart({ pct, gold }) {
+function RingChart({ pct = 0, gold }) {
   const circumference = 283;
   const offset = circumference - (circumference * pct) / 100;
   return (
@@ -527,17 +149,63 @@ function RingChart({ pct, gold }) {
 export default function KundliMatchReport() {
   const [saving, setSaving] = useState(false);
   const reportRef = useRef(null);
+  const navigate = useNavigate();
+  const { matchMaking, formData } = useAstrologyStore();
+
+  if (!matchMaking) {
+    return (
+      <div className="min-h-screen bg-[#eceaf4] font-['Outfit'] flex items-center justify-center px-6">
+        <div className="max-w-md text-center bg-white rounded-2xl border border-secondary shadow-sm p-8">
+          <p className="font-['Philosopher'] text-primary text-lg mb-2">
+            No match report yet
+          </p>
+          <p className="font-['Outfit'] text-sm text-primary/55 mb-6">
+            Enter both birth details on the Kundli Matching page to generate a
+            report.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate("/kundli-matching/")}
+            className="px-6 py-2.5 rounded-xl bg-primary text-white text-sm font-['Philosopher'] tracking-wide hover:bg-gold transition-colors"
+          >
+            Go to Kundli Matching
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const {
-    match_birth_details,
-    match_ashtakoot_points,
-    match_astro_details,
-    match_percentage: mp,
-    match_making_report,
-    match_obstructions,
-    match_dashakoot_points,
-    match_manglik_report,
-    match_planet_details,
-  } = data;
+    match_birth_details = {},
+    match_ashtakoot_points = {},
+    match_astro_details = {},
+    match_percentage: mp = {},
+    match_making_report = {},
+    match_obstructions = {},
+    match_dashakoot_points = {},
+    match_manglik_report = {},
+    match_planet_details = {},
+  } = matchMaking;
+
+  const maleName = formData?.male_name || "Male";
+  const femaleName = formData?.female_name || "Female";
+  const maleBirthDate = formatBirthDate(match_birth_details.male_astro_details);
+  const femaleBirthDate = formatBirthDate(
+    match_birth_details.female_astro_details,
+  );
+
+  const ashtakootTotal =
+    match_ashtakoot_points.total || {
+      total_points: 36,
+      received_points: 0,
+      minimum_required: 18,
+    };
+  const dashakootTotal =
+    match_dashakoot_points.total || {
+      total_points: 36,
+      received_points: 0,
+      minimum_required: 18,
+    };
 
   const handleSavePDF = async () => {
     setSaving(true);
@@ -604,13 +272,13 @@ export default function KundliMatchReport() {
   return (
     <div className="min-h-screen bg-[#eceaf4] font-['Outfit']">
       {/* Save PDF Button */}
-      <button
+      {/* <button
         onClick={handleSavePDF}
         disabled={saving}
         className="fixed top-4 right-4 z-50 px-5 py-2 rounded-full text-white text-sm font-['Philosopher'] tracking-widest bg-primary shadow-lg hover:bg-[#3b3f63] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {saving ? "⏳ Saving..." : "⬇ Save as PDF"}
-      </button>
+      </button> */}
 
       {/* Report Container */}
       <div
@@ -630,14 +298,14 @@ export default function KundliMatchReport() {
           <div className="relative flex items-center justify-between gap-6">
             {/* Male */}
             <div className="shrink-0 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/10 border-2 border-white/20 flex items-center justify-center text-3xl mx-auto shadow-lg">
+              <div className="w-16 h-16 rounded-full bg-white/10 border-2 border-white/20 flex items-center justify-center text-3xl mx-auto shadow-lg text-white">
                 ♂
               </div>
               <p className="font-['Philosopher'] text-white/90 text-xs tracking-widest uppercase mt-2">
-                Male
+                {maleName}
               </p>
               <p className="font-['Outfit'] text-white/50 text-[10px] mt-0.5">
-                11 Jan 2012
+                {maleBirthDate}
               </p>
             </div>
 
@@ -667,14 +335,14 @@ export default function KundliMatchReport() {
 
             {/* Female */}
             <div className="shrink-0 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/10 border-2 border-white/20 flex items-center justify-center text-3xl mx-auto shadow-lg">
+              <div className="w-16 h-16 rounded-full bg-white/10 border-2 border-white/20 flex items-center justify-center text-3xl mx-auto shadow-lg text-white">
                 ♀
               </div>
               <p className="font-['Philosopher'] text-white/90 text-xs tracking-widest uppercase mt-2">
-                Female
+                {femaleName}
               </p>
               <p className="font-['Outfit'] text-white/50 text-[10px] mt-0.5">
-                14 Feb 2011
+                {femaleBirthDate}
               </p>
             </div>
           </div>
@@ -731,22 +399,24 @@ export default function KundliMatchReport() {
               <div className="grid grid-cols-2 gap-4">
                 {[
                   {
-                    label: "Male",
-                    d: match_astro_details.male_astro_details,
-                    bd: match_birth_details.male_astro_details,
+                    gender: "male",
+                    label: maleName,
+                    d: match_astro_details.male_astro_details || {},
+                    bd: match_birth_details.male_astro_details || {},
                   },
                   {
-                    label: "Female",
-                    d: match_astro_details.female_astro_details,
-                    bd: match_birth_details.female_astro_details,
+                    gender: "female",
+                    label: femaleName,
+                    d: match_astro_details.female_astro_details || {},
+                    bd: match_birth_details.female_astro_details || {},
                   },
-                ].map(({ label, d, bd }) => (
+                ].map(({ gender, label, d, bd }) => (
                   <div
-                    key={label}
+                    key={gender}
                     className="bg-[#f4eeff]/60 rounded-xl p-4 border border-secondary"
                   >
                     <p className="font-['Philosopher'] text-[11px] uppercase tracking-[0.15em] text-primary mb-3 flex items-center gap-2">
-                      <span>{label === "Male" ? "♂" : "♀"}</span> {label}
+                      <span>{gender === "male" ? "♂" : "♀"}</span> {label}
                     </p>
                     <div className="space-y-1.5">
                       {[
@@ -790,20 +460,20 @@ export default function KundliMatchReport() {
               <div className="flex items-center justify-between mb-4 px-1">
                 <div>
                   <span className="font-['Philosopher'] text-3xl text-primary">
-                    {match_ashtakoot_points.total.received_points}
+                    {ashtakootTotal.received_points}
                   </span>
                   <span className="font-['Outfit'] text-primary/40 text-sm">
-                    /{match_ashtakoot_points.total.total_points}
+                    /{ashtakootTotal.total_points}
                   </span>
                 </div>
                 <StatusPill
                   ok={
-                    match_ashtakoot_points.total.received_points >=
-                    match_ashtakoot_points.total.minimum_required
+                    ashtakootTotal.received_points >=
+                    ashtakootTotal.minimum_required
                   }
                   label={
-                    match_ashtakoot_points.total.received_points >=
-                    match_ashtakoot_points.total.minimum_required
+                    ashtakootTotal.received_points >=
+                    ashtakootTotal.minimum_required
                       ? "Passed"
                       : "Below Minimum (18)"
                   }
@@ -832,7 +502,13 @@ export default function KundliMatchReport() {
                   </thead>
                   <tbody>
                     {ashtakootRows.map((key, i) => {
-                      const row = match_ashtakoot_points[key];
+                      const row = match_ashtakoot_points[key] || {
+                        description: "-",
+                        male_koot_attribute: "-",
+                        female_koot_attribute: "-",
+                        total_points: 0,
+                        received_points: 0,
+                      };
                       const good = row.received_points >= row.total_points / 2;
                       return (
                         <tr
@@ -872,10 +548,10 @@ export default function KundliMatchReport() {
                         Total
                       </td>
                       <td className="font-['Philosopher'] text-[13px] text-primary px-3 py-2.5">
-                        {match_ashtakoot_points.total.received_points}
+                        {ashtakootTotal.received_points}
                       </td>
                       <td className="font-['Philosopher'] text-[11px] text-primary/60 px-3 py-2.5">
-                        {match_ashtakoot_points.total.total_points}
+                        {ashtakootTotal.total_points}
                       </td>
                     </tr>
                   </tbody>
@@ -883,11 +559,11 @@ export default function KundliMatchReport() {
               </div>
               <div className="mt-3 px-1">
                 <ScoreBar
-                  received={match_ashtakoot_points.total.received_points}
-                  total={match_ashtakoot_points.total.total_points}
+                  received={ashtakootTotal.received_points}
+                  total={ashtakootTotal.total_points}
                 />
                 <p className="font-['Outfit'] text-[11px] text-primary/55 italic mt-2 leading-relaxed">
-                  {match_ashtakoot_points.conclusion.report}
+                  {match_ashtakoot_points.conclusion?.report}
                 </p>
               </div>
             </div>
@@ -901,13 +577,20 @@ export default function KundliMatchReport() {
               <div className="flex items-center justify-between mb-4 px-1">
                 <div>
                   <span className="font-['Philosopher'] text-3xl text-primary">
-                    {match_dashakoot_points.total.received_points}
+                    {dashakootTotal.received_points}
                   </span>
                   <span className="font-['Outfit'] text-primary/40 text-sm">
-                    /{match_dashakoot_points.total.total_points}
+                    /{dashakootTotal.total_points}
                   </span>
                 </div>
-                <StatusPill ok={false} label="Below Minimum (18)" />
+                <StatusPill
+                  ok={dashakootTotal.received_points >= dashakootTotal.minimum_required}
+                  label={
+                    dashakootTotal.received_points >= dashakootTotal.minimum_required
+                      ? "Passed"
+                      : "Below Minimum (18)"
+                  }
+                />
               </div>
               <div className="rounded-xl overflow-hidden border border-secondary">
                 <table className="w-full text-left">
@@ -925,7 +608,12 @@ export default function KundliMatchReport() {
                   </thead>
                   <tbody>
                     {dashakootRows.map((key, i) => {
-                      const row = match_dashakoot_points[key];
+                      const row = match_dashakoot_points[key] || {
+                        male_koot_attribute: "-",
+                        female_koot_attribute: "-",
+                        total_points: 0,
+                        received_points: 0,
+                      };
                       const good = row.received_points >= row.total_points / 2;
                       return (
                         <tr
@@ -962,10 +650,10 @@ export default function KundliMatchReport() {
                         Total
                       </td>
                       <td className="font-['Philosopher'] text-[13px] text-primary px-3 py-2.5">
-                        {match_dashakoot_points.total.received_points}
+                        {dashakootTotal.received_points}
                       </td>
                       <td className="font-['Philosopher'] text-[11px] text-primary/60 px-3 py-2.5">
-                        {match_dashakoot_points.total.total_points}
+                        {dashakootTotal.total_points}
                       </td>
                     </tr>
                   </tbody>
@@ -973,8 +661,8 @@ export default function KundliMatchReport() {
               </div>
               <div className="mt-3 px-1">
                 <ScoreBar
-                  received={match_dashakoot_points.total.received_points}
-                  total={match_dashakoot_points.total.total_points}
+                  received={dashakootTotal.received_points}
+                  total={dashakootTotal.total_points}
                 />
               </div>
             </div>
@@ -989,11 +677,11 @@ export default function KundliMatchReport() {
                 <SectionHeader icon="♂" title="Manglik Report" />
                 <div className="space-y-3">
                   {[
-                    { label: "Male", d: match_manglik_report.male },
-                    { label: "Female", d: match_manglik_report.female },
-                  ].map(({ label, d: md }) => (
+                    { gender: "male", label: maleName, d: match_manglik_report.male || {} },
+                    { gender: "female", label: femaleName, d: match_manglik_report.female || {} },
+                  ].map(({ gender, label, d: md }) => (
                     <div
-                      key={label}
+                      key={gender}
                       className="rounded-xl bg-[#f4eeff]/60 border border-secondary p-3"
                     >
                       <div className="flex items-center justify-between mb-1.5">
@@ -1030,7 +718,7 @@ export default function KundliMatchReport() {
                   ))}
                   <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3">
                     <p className="font-['Outfit'] text-[11px] text-emerald-700 leading-relaxed">
-                      {match_manglik_report.conclusion.report}
+                      {match_manglik_report.conclusion?.report}
                     </p>
                   </div>
                 </div>
@@ -1046,12 +734,14 @@ export default function KundliMatchReport() {
                   {[
                     {
                       label: "Rajju Dosha",
-                      ok: !match_making_report.rajju_dosha.status,
-                      desc: "No Rajju dosha present. Compatible Nakshatra groups.",
+                      ok: !match_making_report.rajju_dosha?.status,
+                      desc: match_making_report.rajju_dosha?.status
+                        ? "Rajju dosha is present between these Nakshatras — consult an astrologer for remedies."
+                        : "No Rajju dosha present. Compatible Nakshatra groups.",
                     },
                     {
                       label: "Vedha Dosha",
-                      ok: !match_making_report.vedha_dosha.status,
+                      ok: !match_making_report.vedha_dosha?.status,
                       desc: match_obstructions.vedha_report,
                     },
                   ].map(({ label, ok, desc }) => (
@@ -1078,7 +768,7 @@ export default function KundliMatchReport() {
                       {[
                         {
                           k: "Ashtakoota",
-                          v: `${match_making_report.ashtakoota.received_points}/36`,
+                          v: `${match_making_report.ashtakoota?.received_points ?? ashtakootTotal.received_points}/36`,
                           ok: false,
                         },
                         {
@@ -1123,17 +813,19 @@ export default function KundliMatchReport() {
               <div className="grid grid-cols-2 gap-4">
                 {[
                   {
-                    label: "Male",
-                    planets: match_planet_details.male_planet_details,
+                    gender: "male",
+                    label: maleName,
+                    planets: match_planet_details.male_planet_details || [],
                   },
                   {
-                    label: "Female",
-                    planets: match_planet_details.female_planet_details,
+                    gender: "female",
+                    label: femaleName,
+                    planets: match_planet_details.female_planet_details || [],
                   },
-                ].map(({ label, planets }) => (
-                  <div key={label}>
+                ].map(({ gender, label, planets }) => (
+                  <div key={gender}>
                     <p className="font-['Philosopher'] text-[11px] text-primary uppercase tracking-[0.15em] mb-2 flex items-center gap-2">
-                      <span>{label === "Male" ? "♂" : "♀"}</span> {label}
+                      <span>{gender === "male" ? "♂" : "♀"}</span> {label}
                     </p>
                     <div className="rounded-xl overflow-hidden border border-secondary">
                       <table className="w-full text-left">
@@ -1219,14 +911,20 @@ export default function KundliMatchReport() {
                   </div>
                 </div>
                 <p className="font-['Outfit'] text-sm text-[#3c3c52] leading-relaxed italic mb-4">
-                  {match_making_report.conclusion.match_report}
+                  {match_making_report.conclusion?.match_report}
                 </p>
                 <div className="flex items-center justify-center gap-3 flex-wrap">
                   {[
-                    { label: "Ashtakoota", ok: false },
-                    { label: "Manglik", ok: true },
-                    { label: "Rajju", ok: true },
-                    { label: "Vedha", ok: true },
+                    {
+                      label: "Ashtakoota",
+                      ok: ashtakootTotal.received_points >= ashtakootTotal.minimum_required,
+                    },
+                    {
+                      label: "Manglik",
+                      ok: match_manglik_report.conclusion?.match ?? true,
+                    },
+                    { label: "Rajju", ok: !match_making_report.rajju_dosha?.status },
+                    { label: "Vedha", ok: !match_making_report.vedha_dosha?.status },
                   ].map(({ label, ok }) => (
                     <StatusPill key={label} ok={ok} label={label} />
                   ))}

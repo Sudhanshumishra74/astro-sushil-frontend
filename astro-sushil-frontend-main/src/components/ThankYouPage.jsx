@@ -1,7 +1,8 @@
 import { motion } from "framer-motion";
 import PageHero from "./HeroPage";
 import { ChevronRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useCurrency } from "../hooks/useCurrency";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -14,6 +15,15 @@ const fadeUp = {
 
 function ThankYouPage({ type }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { convert } = useCurrency();
+
+  // CheckoutPage2 passes `result.data` here under the `order` key, but
+  // that shape differs by payment method: the COD path's result.data is
+  // `{ order, razorpayConfig }` (order.controller.js's createOrder), while
+  // the Razorpay path's is the order document itself (verifyPayment
+  // returns it unwrapped) — resolve both shapes rather than assuming one.
+  const order = location.state?.order?.order || location.state?.order;
 
   return (
     <>
@@ -117,17 +127,51 @@ function ThankYouPage({ type }) {
         </motion.div>
       </div>
 
-      {/* {type === "product" && (
-        <div className="max-w-7xl mx-auto px-5">
+      {type === "product" && order && (
+        <div className="max-w-7xl mx-auto px-5 mb-14">
+          <div className="max-w-md mx-auto bg-white rounded-2xl border border-black/10 shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <span className="font-heading font-bold text-primary">
+                Order Summary
+              </span>
+              <span className="text-xs text-black/40 font-body">
+                #{String(order._id || "").slice(-8).toUpperCase()}
+              </span>
+            </div>
 
+            <div className="space-y-3">
+              {[
+                { label: "Subtotal", value: convert(order.subTotal ?? order.totalAmount) },
+                order.discount > 0 && {
+                  label: `Discount${order.coupon?.code ? ` (${order.coupon.code})` : ""}`,
+                  value: `−${convert(order.discount)}`,
+                  green: true,
+                },
+                order.shipping > 0 && { label: "Shipping", value: convert(order.shipping) },
+                order.tax > 0 && { label: "Tax", value: convert(order.tax) },
+              ]
+                .filter(Boolean)
+                .map(({ label, value, green }) => (
+                  <div key={label} className="flex justify-between items-center gap-3 text-sm">
+                    <span className="text-black/45 font-body">{label}</span>
+                    <span
+                      className={`font-body font-semibold shrink-0 ${green ? "text-green-600" : "text-primary"}`}
+                    >
+                      {value}
+                    </span>
+                  </div>
+                ))}
+
+              <div className="border-t border-dashed border-black/10 pt-3 flex justify-between items-baseline gap-3">
+                <span className="font-heading font-bold text-primary">Total</span>
+                <span className="text-xl font-heading font-bold text-primary shrink-0">
+                  {convert(order.totalAmount)}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
-
-      {type === "consultation" && (
-        <div className="max-w-7xl mx-auto px-5">
-          
-        </div>
-      )} */}
     </>
   );
 }

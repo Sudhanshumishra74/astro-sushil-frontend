@@ -1,7 +1,23 @@
+// Windowed page list with ellipses (1 2 … 14) instead of every page number —
+// keeps the control usable once there are more than a handful of pages.
+function getPageNumbers(current, total) {
+  const delta = 1;
+  const rangeStart = Math.max(2, current - delta);
+  const rangeEnd = Math.min(total - 1, current + delta);
+
+  const pages = [1];
+  if (rangeStart > 2) pages.push("…");
+  for (let i = rangeStart; i <= rangeEnd; i++) pages.push(i);
+  if (rangeEnd < total - 1) pages.push("…");
+  if (total > 1) pages.push(total);
+
+  return pages;
+}
+
 export default function Pagination({ current, total, onChange }) {
   if (total <= 1) return null;
 
-  const pages = Array.from({ length: total }, (_, i) => i + 1);
+  const pages = getPageNumbers(current, total);
 
   return (
     <nav
@@ -24,27 +40,37 @@ export default function Pagination({ current, total, onChange }) {
         Prev
       </button>
 
-      {pages.map((p) => (
-        <button
-          key={p}
-          type="button"
-          onClick={() => onChange(p)}
-          aria-label={`Page ${p}`}
-          aria-current={p === current ? "page" : undefined}
-          className={`
-            w-9 h-9 rounded-full cursor-pointer text-sm font-body font-medium
-            border transition-all duration-700
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
-            ${
-              p === current
-                ? "bg-primary text-white border-primary shadow-sm"
-                : "bg-white text-black border-black/12 hover:bg-black/5"
-            }
-          `}
-        >
-          {p}
-        </button>
-      ))}
+      {pages.map((p, i) =>
+        p === "…" ? (
+          <span
+            key={`ellipsis-${i}`}
+            aria-hidden="true"
+            className="w-9 h-9 flex items-center justify-center text-sm font-body text-black/40"
+          >
+            …
+          </span>
+        ) : (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onChange(p)}
+            aria-label={`Page ${p}`}
+            aria-current={p === current ? "page" : undefined}
+            className={`
+              w-9 h-9 rounded-full cursor-pointer text-sm font-body font-medium
+              border transition-all duration-700
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
+              ${
+                p === current
+                  ? "bg-primary text-white border-primary shadow-sm"
+                  : "bg-white text-black border-black/12 hover:bg-black/5"
+              }
+            `}
+          >
+            {p}
+          </button>
+        ),
+      )}
 
       {/* Next */}
       <button

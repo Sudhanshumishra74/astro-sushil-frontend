@@ -5,6 +5,30 @@ import { showError, showSuccess } from "../utils/toast";
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const CART_URL = `${BASE_URL}/cart`;
 
+// incrementQuantity/decrementQuantity read the current quantity out of
+// `cart.items` and PUT `current +/- 1` — correct for a single click, but
+// concurrent clicks on the same row (a user tapping +/+ quickly, or a
+// double-fire from a fast tap) all read the SAME stale `cart.items` before
+// any of their PUT+refetch round-trips land, so they compute the same
+// "next" quantity and net fewer increments than clicks. Queuing per-item
+// mutations so each one only starts once the previous has fully resolved
+// (PUT + getCartItems refresh) means every click reads a state that
+// already reflects every click before it — no drops, no rename to move
+// this update logic into.
+const itemMutationQueues = new Map();
+
+function queueItemMutation(key, run) {
+  const previous = itemMutationQueues.get(key) || Promise.resolve();
+  const next = previous.then(run, run);
+  itemMutationQueues.set(key, next);
+  return next;
+}
+
+function matchesCartItem(item, productId) {
+  const itemId = item.product?._id || item.product;
+  return itemId === productId;
+}
+
 export const useCartStore = create((set, get) => {
   const getAuthHeaders = () => {
     const token = localStorage.getItem("token");
@@ -71,13 +95,15 @@ export const useCartStore = create((set, get) => {
           getAuthHeaders(),
         );
 
+        // The response body *is* the cart (ApiResponse(200, cart, ...)) —
+        // couponCode/discount are its only real fields; there's no nested
+        // `coupon` object with type/maxDiscount on it (the old code guessed
+        // at that shape and always fell back to defaults for those two).
         const data = res.data?.data;
 
         const appliedCoupon = {
           code: data?.couponCode || code,
-          discount: data?.discount ?? data?.coupon?.discount ?? 0,
-          type: data?.coupon?.type || "FLAT",
-          maxDiscount: data?.coupon?.maxDiscount ?? null,
+          discount: data?.discount ?? 0,
         };
 
         set({ appliedCoupon, couponError: null });
@@ -96,8 +122,20 @@ export const useCartStore = create((set, get) => {
       }
     },
 
-    removeCoupon: () => {
-      set({ appliedCoupon: null, couponError: null });
+    // Used to only clear local state — cart.couponCode stayed set
+    // server-side (there was no DELETE endpoint at all), so calculateCart
+    // kept re-applying the "removed" coupon on every subsequent cart read
+    // and at order creation. Now actually clears it server-side too.
+    removeCoupon: async () => {
+      try {
+        const res = await axios.delete(`${CART_URL}/coupon`, getAuthHeaders());
+        set({ appliedCoupon: null, couponError: null });
+        await get().getCartItems();
+        return { success: true, data: res.data };
+      } catch (err) {
+        showError(err);
+        return { success: false, error: err?.response?.data?.message };
+      }
     },
     addToCart: async (product) => {
       try {
@@ -112,6 +150,25 @@ export const useCartStore = create((set, get) => {
 
         if (product.variantId) {
           payload.variantId = product.variantId;
+        }
+
+        // Cascading second level — only meaningful when the selected
+        // variant has sub-variants (see product.modal.js's variantSchema).
+        if (product.subVariantId) {
+          payload.subVariantId = product.subVariantId;
+        }
+
+        // Gemstone products (product.soldByRatti) have no variants at all —
+        // this is their entire selection instead.
+        if (product.selectedRatti) {
+          payload.selectedRatti = product.selectedRatti;
+        }
+
+        // Single certificate chosen from product.certificates (dropdown,
+        // see Productdetailpage.jsx) — gated site-wide by
+        // Setting.product.certificatesEnabled.
+        if (product.certificateId) {
+          payload.certificateId = product.certificateId;
         }
 
         const res = await axios.post(
@@ -141,10 +198,15 @@ export const useCartStore = create((set, get) => {
       }
     },
 
-    removeFromCart: async (productId, variantId) => {
+    // `itemId` (the cart line's own _id) is the unambiguous identifier —
+    // pass it whenever you have it (e.g. from a real cart-page row). It's
+    // optional for callers that only ever deal in unambiguous internal
+    // products (a listing card's qty stepper, keyed by product+variant).
+    removeFromCart: async (productId, variantId, itemId) => {
       try {
         const res = await axios.delete(`${CART_URL}/remove`, {
           data: {
+            itemId,
             productId,
             variantId,
           },
@@ -171,11 +233,12 @@ export const useCartStore = create((set, get) => {
       }
     },
 
-    updateQuantity: async (productId, variantId, quantity) => {
+    updateQuantity: async (productId, variantId, quantity, itemId) => {
       try {
         const res = await axios.put(
           `${CART_URL}/update`,
           {
+            itemId,
             productId,
             variantId,
             quantity,
@@ -199,50 +262,64 @@ export const useCartStore = create((set, get) => {
       }
     },
 
-    incrementQuantity: async (productId, variantId) => {
-      const cartData = get().cart;
+    // If `itemId` is given, it's used directly (no ambiguity possible). If
+    // not, falls back to a product+variant lookup. Either way, once the
+    // matching line is found, its own `_id` is what actually gets sent to
+    // the backend from here on, so a caller that only had product+variant
+    // still ends up mutating the exact right row.
+    incrementQuantity: async (productId, variantId, itemId) => {
+      const key = itemId || `${productId}:${variantId || ""}`;
 
-      const items = cartData?.items || [];
+      return queueItemMutation(key, async () => {
+        const items = get().cart?.items || [];
 
-      const item = items.find(
-        (i) =>
-          i.product === productId &&
-          String(i.variantId || "") === String(variantId || ""),
-      );
+        const item = itemId
+          ? items.find((i) => i._id === itemId)
+          : items.find(
+              (i) =>
+                i.product === productId &&
+                String(i.variantId || "") === String(variantId || ""),
+            );
 
-      if (!item) {
-        return;
-      }
+        if (!item) {
+          return;
+        }
 
-      return await get().updateQuantity(
-        productId,
-        variantId,
-        item.quantity + 1,
-      );
+        return await get().updateQuantity(
+          productId,
+          variantId,
+          item.quantity + 1,
+          item._id,
+        );
+      });
     },
 
-    decrementQuantity: async (productId, variantId) => {
-      const cartData = get().cart;
+    decrementQuantity: async (productId, variantId, itemId) => {
+      const key = itemId || `${productId}:${variantId || ""}`;
 
-      const items = cartData?.items || [];
+      return queueItemMutation(key, async () => {
+        const items = get().cart?.items || [];
 
-      const item = items.find(
-        (i) =>
-          i.product === productId &&
-          String(i.variantId || "") === String(variantId || ""),
-      );
+        const item = itemId
+          ? items.find((i) => i._id === itemId)
+          : items.find(
+              (i) =>
+                i.product === productId &&
+                String(i.variantId || "") === String(variantId || ""),
+            );
 
-      if (!item) {
-        return;
-      }
+        if (!item) {
+          return;
+        }
 
-      const newQty = item.quantity - 1;
+        const newQty = item.quantity - 1;
 
-      if (newQty <= 0) {
-        return await get().removeFromCart(productId, variantId);
-      }
+        if (newQty <= 0) {
+          return await get().removeFromCart(productId, variantId, item._id);
+        }
 
-      return await get().updateQuantity(productId, variantId, newQty);
+        return await get().updateQuantity(productId, variantId, newQty, item._id);
+      });
     },
 
     clearCart: () => {
@@ -272,21 +349,13 @@ export const useCartStore = create((set, get) => {
     isInCart: (productId) => {
       const items = get().cart?.items || [];
 
-      return items.some((item) => {
-        const itemId = item.product?._id || item.product;
-
-        return itemId === productId;
-      });
+      return items.some((item) => matchesCartItem(item, productId));
     },
 
     getProductQuantity: (productId) => {
       const items = get().cart?.items || [];
 
-      const item = items.find((item) => {
-        const itemId = item.product?._id || item.product;
-
-        return itemId === productId;
-      });
+      const item = items.find((item) => matchesCartItem(item, productId));
 
       return item ? item.quantity : 0;
     },

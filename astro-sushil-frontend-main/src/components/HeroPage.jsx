@@ -59,7 +59,6 @@ export default function PageHero({
   image = DEFAULT_BG,
   align = "center",
   minHeight = "min-h-[20vh]",
-  ctaBtn = "",
 }) {
   const isCenter = align === "center";
 
@@ -136,31 +135,15 @@ export default function PageHero({
           </motion.p>
         )}
       </div>
-      <div className="w-full relative max-w-7xl mx-auto px-5 flex justify-end">
+      <div className="w-full relative max-w-7xl mx-auto px-5">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="absolute left-6 bottom-0 pr-10 bg-white/5 rounded-tr-3xl px-3 py-3 backdrop-blur-sm max-w-max"
+          className="absolute left-6 right-0 bottom-0 pr-10 bg-white/5 rounded-tr-3xl px-3 py-3 backdrop-blur-sm max-w-max"
         >
           <Breadcrumb crumbs={breadcrumbs} />
         </motion.div>
-
-        {ctaBtn && (
-          <Link
-            to="/"
-            className="group relative overflow-hidden flex items-center gap-2 rounded-full bg-linear-to-r from-gold via-yellow-400 to-gold px-6 py-3 text-xs md:text-sm font-semibold text-black shadow-lg shadow-gold/20 transition-all duration-300 hover:shadow-xl hover:shadow-gold/30 m-2 cursor-pointer"
-          >
-            <span className="hidden md:block relative z-10">{ctaBtn}</span>
-            <span className="relative md:hidden z-10">Talk To Astrologer</span>
-            <span className="relative z-10 transition-transform duration-300 group-hover:translate-x-1">
-              →
-            </span>
-
-            {/* Shine effect */}
-            <span className="absolute inset-0 -translate-x-full bg-linear-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-          </Link>
-        )}
       </div>
     </header>
   );

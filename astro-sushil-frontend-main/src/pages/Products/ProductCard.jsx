@@ -18,6 +18,7 @@ import { useWishlistStore } from "../../store/useWishlistStore";
 import toast from "react-hot-toast";
 import { useCurrencyStore } from "../../store/useCurrencyStore";
 import { useCurrency } from "../../hooks/useCurrency";
+import { isVariantOutOfStock } from "../../utils/stock";
 
 export default function ProductCard({
   user,
@@ -36,9 +37,11 @@ export default function ProductCard({
   onBook,
   variants = [],
   hasVariants = false,
+  soldByRatti = false,
+  stock = 0,
   isInCart: initialIsInCart = false,
   isWishlisted: initialIsWishlisted = false,
- 
+
 }) {
   const { addToCart, incrementQuantity, decrementQuantity } = useCartStore();
   const { toggleWishlist } = useWishlistStore();
@@ -87,12 +90,38 @@ const displayOriginalPrice = (() => {
 })();
  
 
+  // A variant with sub-variants isn't directly purchasable — there's no
+  // second picker level on a listing card, so send the customer to the PDP
+  // to finish drilling down instead of firing an incomplete variantId-only
+  // add-to-cart. A gemstone (soldByRatti) has no card-level picker at all —
+  // it always needs the PDP's ratti selector.
+  const needsSubVariant =
+    (hasVariants && selectedVariant?.subVariants?.length > 0) || soldByRatti;
+
+  // Digital/service products aren't inventory-tracked — `stock` defaults to
+  // 0 for every type, so gating on it here would show every digital product
+  // as permanently out of stock.
+  const isOutOfStock =
+    type !== "physical"
+      ? false
+      : hasVariants
+        ? selectedVariant
+          ? isVariantOutOfStock(selectedVariant)
+          : false
+        : stock <= 0;
+
   const handleAddToCart = async () => {
+    if (isOutOfStock) return;
     if (!user) {
       onLoginRequired?.();
       return;
     }
     if (inCart) return;
+    if (needsSubVariant) {
+      toast("Select options to continue");
+      onBook?.();
+      return;
+    }
     const payload = { productId: _id, quantity: 1 };
     if (hasVariants && selectedVariant?._id)
       payload.variantId = selectedVariant._id;
@@ -114,8 +143,14 @@ const displayOriginalPrice = (() => {
   };
 
   const handleBuyNow = async () => {
+    if (isOutOfStock) return;
     if (!user) {
       onLoginRequired?.();
+      return;
+    }
+    if (needsSubVariant) {
+      toast("Select options to continue");
+      onBook?.();
       return;
     }
     const payload = { productId: _id, quantity: 1 };
@@ -193,6 +228,11 @@ const displayOriginalPrice = (() => {
               {badge}
             </span>
           )}
+          {isOutOfStock && (
+            <span className="px-2.5 py-0.5 rounded-full bg-red-500/90 text-white text-xs font-body font-medium shadow">
+              Out of Stock
+            </span>
+          )}
         </div>
 
         <span
@@ -255,7 +295,7 @@ const displayOriginalPrice = (() => {
                 <div className="flex flex-wrap gap-1.5">
                   {groupVariants.map((v) => {
                     const isSelected = selectedVariant?._id === v._id;
-                    const outOfStock = v.stock === 0;
+                    const outOfStock = isVariantOutOfStock(v);
                     return (
                       <button
                         key={v._id}
@@ -308,6 +348,9 @@ const displayOriginalPrice = (() => {
                 Price on selection
               </span>
             )}
+            {soldByRatti && (displaySalePrice || displayOriginalPrice) && (
+              <span className="text-white/50 text-[11px] font-body">/ ratti</span>
+            )}
           </div>
           {(displaySalePrice || displayOriginalPrice) && (
             <span className="text-white/40 text-[10.5px] font-body">
@@ -317,7 +360,15 @@ const displayOriginalPrice = (() => {
         </div>
 
         <div className="flex gap-2 mt-auto">
-          {inCart ? (
+          {isOutOfStock && !inCart ? (
+            <button
+              type="button"
+              disabled
+              className="flex-1 px-5 py-2 rounded-md border border-white/10 bg-white/5 text-white/35 font-body text-base font-normal flex items-center justify-center gap-1.5 cursor-not-allowed"
+            >
+              Out of Stock
+            </button>
+          ) : inCart ? (
             <motion.div
               key="qty-controls"
               initial={{ opacity: 0, scale: 0.9 }}
@@ -382,14 +433,17 @@ const displayOriginalPrice = (() => {
           )}
 
           {/* Buy Now */}
-          <button
-            type="button"
-            onClick={handleBuyNow}
-            className="flex-1 px-5 py-2 cursor-pointer rounded-md border border-gold text-white font-body text-base font-normal flex items-center justify-center gap-1.5 hover:bg-gold/85 active:scale-[0.97] transition-colors duration-700 focus-visible:outline-none"
-          >
-            {/* <Zap size={12} />  */}
-            Buy Now
-          </button>
+          {!(isOutOfStock && !inCart) && (
+            <button
+              type="button"
+              onClick={handleBuyNow}
+              disabled={isOutOfStock}
+              className="flex-1 px-5 py-2 cursor-pointer rounded-md border border-gold text-white font-body text-base font-normal flex items-center justify-center gap-1.5 hover:bg-gold/85 active:scale-[0.97] transition-colors duration-700 focus-visible:outline-none disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            >
+              {/* <Zap size={12} />  */}
+              Buy Now
+            </button>
+          )}
         </div>
       </div>
     </div>

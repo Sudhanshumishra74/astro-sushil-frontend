@@ -20,6 +20,7 @@ import {
   Package,
 } from "lucide-react";
 import { useConsultationStore } from "../../store/useConsultationStore";
+import { Link } from "react-router-dom"
 
 const STATUS = {
   completed: {
@@ -119,6 +120,7 @@ function normaliseBooking(b) {
     duration: b.duration,
     status: b.status === "booked" ? "upcoming" : b.status,
     amount: b.amount || b.price?.inr || 0,
+    note: b.note,
   };
 }
 
@@ -225,17 +227,26 @@ function ConsultationCard({ item, index }) {
               Invoice
             </motion.button>
 
-            <motion.button
-              whileTap={{ scale: 0.96 }}
+            <Link
+              to="/online-consultations"
               type="button"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gold text-white font-body text-[11px] font-medium hover:bg-gold cursor-pointer transition-colors duration-700 disabled:opacity-60"
             >
               {/* <RotateCcw size={11} />  */}
               Book Again
-            </motion.button>
+            </Link>
           </div>
         </div>
       </div>
+
+      {item.note && (
+        <div className="px-4 sm:px-5 pb-4 pt-1">
+          <p className="text-[9px] font-body font-bold text-black/30 uppercase tracking-widest mb-1">
+            Your Note
+          </p>
+          <p className="text-xs font-body text-black/60 italic">{item.note}</p>
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -3,6 +3,7 @@ export const trackPurchase = ({
   amount,
   productId,
   productName,
+  currency = "INR",
 }) => {
   const purchaseKey = `purchase_${orderId}`;
 
@@ -18,7 +19,7 @@ export const trackPurchase = ({
     ecommerce: {
       transaction_id: String(orderId),
       value: Number(amount),
-      currency: "INR",
+      currency,
 
       items: [
         {
@@ -32,6 +33,4 @@ export const trackPurchase = ({
   });
 
   sessionStorage.setItem(purchaseKey, "true");
-
-  console.log("Purchase Event Fired Successfully", { orderId, amount });
 };

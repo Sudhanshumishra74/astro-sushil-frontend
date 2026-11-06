@@ -1,102 +1,185 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useMemo, useEffect } from "react";
 import {
-  Package, Download, Eye, Calendar, RefreshCw, XCircle,
+  Package,
+  Download,
+  Eye,
+  Calendar,
+  RefreshCw,
+  XCircle,
+  Ban,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { usePaymentStore } from "../../store/usePaymentStore";
+import { useSettingStore } from "../../store/usSettingStore";
 import Pagination from "../../components/Pagination";
+import ResponsiveDialog from "../../components/ResponsiveDialog";
 import toast from "react-hot-toast";
 
-const ITEMS_PER_PAGE = 4;
+const NOT_CANCELLABLE_STATUSES = ["delivered", "cancelled"];
+
+function isOrderCancellable(order, cancellationWindowHours) {
+  if (NOT_CANCELLABLE_STATUSES.includes(order.status)) return false;
+  if (!cancellationWindowHours || cancellationWindowHours <= 0) return true;
+
+  const cutoff = new Date(
+    new Date(order.orderDate).getTime() +
+      cancellationWindowHours * 60 * 60 * 1000,
+  );
+  return new Date() <= cutoff;
+}
+
+const ITEMS_PER_PAGE = 5;
 
 const STATUS_STYLES = {
-  delivered:  { dot: "bg-green-500",  text: "text-green-600",  label: "Delivered" },
-  confirmed:  { dot: "bg-teal-500",   text: "text-teal-600",   label: "Confirmed" },
-  processing: { dot: "bg-amber-400",  text: "text-amber-600",  label: "Processing" },
-  shipped:    { dot: "bg-blue-400",   text: "text-blue-600",   label: "Shipped" },
-  cancelled:  { dot: "bg-red-400",    text: "text-red-500",    label: "Cancelled" },
-  pending:    { dot: "bg-gray-400",   text: "text-gray-500",   label: "Pending" },
-  paid:       { dot: "bg-green-500",  text: "text-green-600",  label: "Paid" },
+  payment_pending: {
+    dot: "bg-gray-400",
+    text: "text-gray-500",
+    label: "Payment Pending",
+  },
+  placed: { dot: "bg-amber-400", text: "text-amber-600", label: "Placed" },
+  confirmed: { dot: "bg-teal-500", text: "text-teal-600", label: "Confirmed" },
+  processing: {
+    dot: "bg-amber-400",
+    text: "text-amber-600",
+    label: "Processing",
+  },
+  shipped: { dot: "bg-blue-400", text: "text-blue-600", label: "Shipped" },
+  delivered: {
+    dot: "bg-green-500",
+    text: "text-green-600",
+    label: "Delivered",
+  },
+  cancelled: { dot: "bg-red-400", text: "text-red-500", label: "Cancelled" },
+  payment_failed: {
+    dot: "bg-red-400",
+    text: "text-red-500",
+    label: "Payment Failed",
+  },
 };
 
 const getStatusStyle = (status) =>
-  STATUS_STYLES[status?.toLowerCase()] || STATUS_STYLES.pending;
+  STATUS_STYLES[status?.toLowerCase()] || STATUS_STYLES.payment_pending;
 
 const fmt = (dateStr) => {
   if (!dateStr) return "—";
   return new Date(dateStr).toLocaleDateString("en-GB", {
-    day: "2-digit", month: "short", year: "numeric",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
 };
 
 const fmtPrice = (n) =>
   new Intl.NumberFormat("en-IN", {
-    style: "currency", currency: "INR", maximumFractionDigits: 0,
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
   }).format(n ?? 0);
 
 const normalizeOrder = (o) => {
-  const firstItem = o.items?.[0];
-  const productImage =
-    firstItem?.image ||
-    firstItem?.product?.thumbnail ||
-    firstItem?.product?.images?.[0] ||
-    null;
+  const items = (o.items || []).map((item) => ({
+    name: item.name || item.product?.name || "Item",
+    image:
+      item.image ||
+      item.product?.thumbnail ||
+      item.product?.images?.[0] ||
+      null,
+    quantity: item.quantity || 1,
+    price: item.price || 0,
+    mrp: item.mrp || item.price || 0,
+  }));
 
-  const productName =
-    firstItem?.name ||
-    firstItem?.product?.name ||
-    o.productName ||
-    "Order";
+  const itemsMrpTotal = items.reduce((sum, i) => sum + i.mrp * i.quantity, 0);
 
   const status =
-    o.orderStatus ||
-    o.payment?.status ||
-    o.paymentStatus ||
-    "pending";
+    o.orderStatus || o.payment?.status || o.paymentStatus || "pending";
 
   return {
     _id: o._id,
-    orderNumber: `#${o._id?.slice(-10).toUpperCase()}`,
-    productName,
-    image: productImage,
+    orderNumber: `#${o._id?.slice(-8).toUpperCase()}`,
+    items,
+    productName: items[0]?.name || o.productName || "Order",
+    image: items[0]?.image || null,
     orderDate: o.createdAt,
     deliveryDate: o.deliveryDate || null,
-    originalPrice: firstItem?.mrp || o.totalAmount || 0,
+    originalPrice: itemsMrpTotal,
     finalPrice: o.totalAmount ?? o.amount ?? 0,
     status: status.toLowerCase(),
-    itemCount: o.items?.length ?? 1,
+    itemCount: items.length || 1,
     paymentMethod: o.payment?.method || o.paymentMethod || "—",
     orderType: o.orderType,
+    // Kept separate from `status` (which prioritizes orderStatus) — a
+    // cancelled order's refund state is a distinct payment-level fact the
+    // customer otherwise has no way to see here.
+    rawPaymentStatus: (o.payment?.status || "").toLowerCase(),
   };
 };
 
 const TABS = [
-  { key: "all",     label: "All"     },
-  { key: "today",   label: "Today"   },
+  { key: "all", label: "All" },
+  { key: "today", label: "Today" },
   { key: "monthly", label: "Monthly" },
-  { key: "yearly",  label: "Yearly"  },
+  { key: "yearly", label: "Yearly" },
 ];
 
 function StatusBadge({ status }) {
   const s = getStatusStyle(status);
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${s.text}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${s.text}`}
+    >
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
       {s.label}
     </span>
   );
 }
 
-function OrderCard({ order, onDownload, onView, downloading }) {
+// Cancelling a "paid" razorpay order always tries to refund it right away
+// (refundOrderOnCancellation, order.controller.js) — payment.status still
+// showing "paid" on a cancelled order means that attempt failed and is
+// awaiting manual follow-up, not that no refund is owed.
+function RefundBadge({ status, rawPaymentStatus, paymentMethod }) {
+  if (status !== "cancelled") return null;
+
+  if (
+    rawPaymentStatus === "refunded" ||
+    rawPaymentStatus === "partially_refunded"
+  ) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
+        {rawPaymentStatus === "refunded" ? "Refunded" : "Partially Refunded"}
+      </span>
+    );
+  }
+
+  if (rawPaymentStatus === "paid" && paymentMethod === "razorpay") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">
+        Refund Pending
+      </span>
+    );
+  }
+
+  return null;
+}
+
+function OrderCard({
+  order,
+  onDownload,
+  onView,
+  onCancel,
+  downloading,
+  cancellationWindowHours,
+}) {
   return (
     <div className="bg-white rounded-2xl border border-black/8 shadow-sm overflow-hidden flex flex-col sm:flex-row hover:shadow-md transition-shadow duration-200">
-      <div className="sm:w-36 sm:h-auto h-44 shrink-0 bg-gray-100 overflow-hidden">
+      <div className="sm:w-36 sm:h-auto h-44 shrink-0 bg-gray-100 overflow-hidden relative">
         {order.image ? (
           <img
             src={order.image}
             alt={order.productName}
-            className="w-full h-full object-cover"
+            className="w-full md:h-40 object-cover"
             loading="lazy"
             decoding="async"
           />
@@ -105,34 +188,60 @@ function OrderCard({ order, onDownload, onView, downloading }) {
             <Package size={32} className="text-gray-300" />
           </div>
         )}
+        {order.itemCount > 1 && (
+          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/60 text-white text-[10px] font-semibold font-body">
+            +{order.itemCount - 1} more
+          </span>
+        )}
       </div>
 
       <div className="flex flex-col flex-1 p-4 sm:p-5 gap-3">
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-heading text-black text-[15px] leading-snug line-clamp-2 flex-1">
-            {order.productName}
+            {order.items.map((i) => i.name).join(", ") || order.productName}
           </h3>
-          <StatusBadge status={order.status} />
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <StatusBadge status={order.status} />
+            <RefundBadge
+              status={order.status}
+              rawPaymentStatus={order.rawPaymentStatus}
+              paymentMethod={order.paymentMethod}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5">
           <div>
-            <p className="text-[10px] text-black/40 font-body uppercase tracking-wider">Order No.</p>
-            <p className="text-[12px] text-black font-semibold font-body">{order.orderNumber}</p>
+            <p className="text-[10px] text-black/40 font-body uppercase tracking-wider">
+              Order No.
+            </p>
+            <p className="text-[12px] text-black font-semibold font-body">
+              {order.orderNumber}
+            </p>
           </div>
           <div>
-            <p className="text-[10px] text-black/40 font-body uppercase tracking-wider">Order Date</p>
-            <p className="text-[13px] text-black font-body">{fmt(order.orderDate)}</p>
+            <p className="text-[10px] text-black/40 font-body uppercase tracking-wider">
+              Order Date
+            </p>
+            <p className="text-[13px] text-black font-body">
+              {fmt(order.orderDate)}
+            </p>
           </div>
           <div>
-            <p className="text-[10px] text-black/40 font-body uppercase tracking-wider">Delivery Date</p>
+            <p className="text-[10px] text-black/40 font-body uppercase tracking-wider">
+              Delivery Date
+            </p>
             <p className="text-[13px] text-black font-body">
               {order.deliveryDate ? fmt(order.deliveryDate) : "To be updated"}
             </p>
           </div>
           <div>
-            <p className="text-[10px] text-black/40 font-body uppercase tracking-wider">Payment</p>
-            <p className="text-[13px] text-black font-body uppercase">{order.paymentMethod}</p>
+            <p className="text-[10px] text-black/40 font-body uppercase tracking-wider">
+              Payment
+            </p>
+            <p className="text-[13px] text-black font-body uppercase">
+              {order.paymentMethod}
+            </p>
           </div>
         </div>
 
@@ -173,6 +282,15 @@ function OrderCard({ order, onDownload, onView, downloading }) {
               )}
               Invoice
             </button>
+            {isOrderCancellable(order, cancellationWindowHours) && (
+              <button
+                onClick={() => onCancel(order)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-red-200 text-red-600 text-[12px] font-medium font-body hover:bg-red-50 active:scale-[0.97] transition-all duration-700 cursor-pointer focus-visible:outline-none"
+              >
+                <Ban size={13} />
+                Cancel
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -208,15 +326,31 @@ function OrderSkeleton() {
 
 export default function MyOrdersPage() {
   const navigate = useNavigate();
-  const [tab,         setTab]    = useState("all");
-  const [dateVal,     setDateVal] = useState("");
-  const [page,        setPage]   = useState(1);
-  const [downloading, setDl]     = useState(null);
+  const [tab, setTab] = useState("all");
+  const [dateVal, setDateVal] = useState("");
+  const [page, setPage] = useState(1);
+  const [downloading, setDl] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
 
-  const { orders, ordersLoading, ordersError, getOrders, downloadInvoice } =
-    usePaymentStore();
+  const {
+    orders,
+    ordersLoading,
+    ordersError,
+    getOrders,
+    downloadInvoice,
+    cancelOrder,
+  } = usePaymentStore();
+  const { settings, fetchSettings } = useSettingStore();
+  const cancellationWindowHours =
+    settings?.order?.cancellationWindowHours ?? 24;
 
-  useEffect(() => { getOrders(); }, []);
+  useEffect(() => {
+    getOrders();
+  }, []);
+  useEffect(() => {
+    if (!settings) fetchSettings();
+  }, []);
 
   const normalized = useMemo(
     () => (Array.isArray(orders) ? orders.map(normalizeOrder) : []),
@@ -228,9 +362,10 @@ export default function MyOrdersPage() {
 
     // Specific date overrides tab
     if (dateVal) {
-      return list.filter((o) =>
-        o.orderDate &&
-        new Date(o.orderDate).toISOString().split("T")[0] === dateVal
+      return list.filter(
+        (o) =>
+          o.orderDate &&
+          new Date(o.orderDate).toISOString().split("T")[0] === dateVal,
       );
     }
 
@@ -238,19 +373,25 @@ export default function MyOrdersPage() {
 
     if (tab === "today") {
       const today = now.toISOString().split("T")[0];
-      list = list.filter((o) =>
-        o.orderDate &&
-        new Date(o.orderDate).toISOString().split("T")[0] === today
+      list = list.filter(
+        (o) =>
+          o.orderDate &&
+          new Date(o.orderDate).toISOString().split("T")[0] === today,
       );
     } else if (tab === "monthly") {
       list = list.filter((o) => {
         if (!o.orderDate) return false;
         const d = new Date(o.orderDate);
-        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+        return (
+          d.getFullYear() === now.getFullYear() &&
+          d.getMonth() === now.getMonth()
+        );
       });
     } else if (tab === "yearly") {
-      list = list.filter((o) =>
-        o.orderDate && new Date(o.orderDate).getFullYear() === now.getFullYear()
+      list = list.filter(
+        (o) =>
+          o.orderDate &&
+          new Date(o.orderDate).getFullYear() === now.getFullYear(),
       );
     }
 
@@ -258,10 +399,21 @@ export default function MyOrdersPage() {
   }, [normalized, tab, dateVal]);
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginated  = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const paginated = filtered.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE,
+  );
 
-  const handleTab = (key) => { setTab(key); setDateVal(""); setPage(1); };
-  const handleDate = (e) => { setDateVal(e.target.value); setTab("all"); setPage(1); };
+  const handleTab = (key) => {
+    setTab(key);
+    setDateVal("");
+    setPage(1);
+  };
+  const handleDate = (e) => {
+    setDateVal(e.target.value);
+    setTab("all");
+    setPage(1);
+  };
 
   const handleView = (order) => navigate(`/dashboard/orders/${order._id}`);
 
@@ -277,12 +429,25 @@ export default function MyOrdersPage() {
     }
   };
 
+  const handleConfirmCancel = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    const result = await cancelOrder(cancelTarget._id);
+    setCancelling(false);
+    setCancelTarget(null);
+
+    if (result?.success) {
+      toast.success("Order cancelled");
+      getOrders();
+    } else {
+      toast.error(result?.error || "Failed to cancel order");
+    }
+  };
+
   return (
     <div className="flex flex-col gap-5 animate-fadeIn min-h-screen">
-
       {/* ── Tabs + date picker ─────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-
         <div className="flex items-center gap-2 flex-wrap">
           {TABS.map((t) => (
             <button
@@ -290,9 +455,11 @@ export default function MyOrdersPage() {
               type="button"
               onClick={() => handleTab(t.key)}
               className={`px-4 py-2 rounded-xl text-[13px] font-medium font-body transition-all duration-700 cursor-pointer focus-visible:outline-none
-                ${tab === t.key && !dateVal
-                  ? "bg-gold text-white border-gold shadow-sm"
-                  : "bg-primary hover:bg-gold text-white"}`}
+                ${
+                  tab === t.key && !dateVal
+                    ? "bg-gold text-white border-gold shadow-sm"
+                    : "bg-primary hover:bg-gold text-white"
+                }`}
             >
               {t.label}
             </button>
@@ -305,7 +472,10 @@ export default function MyOrdersPage() {
             title="Refresh orders"
             className="px-3 py-2 rounded-xl text-[13px] font-semibold font-body border border-primary/30 text-primary hover:bg-primary bg-white hover:text-white transition-all duration-700 cursor-pointer disabled:opacity-50 focus-visible:outline-none"
           >
-            <RefreshCw size={14} className={ordersLoading ? "animate-spin" : ""} />
+            <RefreshCw
+              size={14}
+              className={ordersLoading ? "animate-spin" : ""}
+            />
           </button>
         </div>
 
@@ -324,7 +494,10 @@ export default function MyOrdersPage() {
             {dateVal && (
               <button
                 type="button"
-                onClick={() => { setDateVal(""); setPage(1); }}
+                onClick={() => {
+                  setDateVal("");
+                  setPage(1);
+                }}
                 className="text-black/30 hover:text-black transition-colors text-xs ml-1 cursor-pointer"
                 aria-label="Clear date"
               >
@@ -353,7 +526,9 @@ export default function MyOrdersPage() {
       {/* ── Skeleton ──────────────────────────────────────────────────── */}
       {ordersLoading && (
         <div className="flex flex-col gap-4">
-          {[1, 2, 3].map((i) => <OrderSkeleton key={i} />)}
+          {[1, 2, 3].map((i) => (
+            <OrderSkeleton key={i} />
+          ))}
         </div>
       )}
 
@@ -379,7 +554,9 @@ export default function MyOrdersPage() {
               order={order}
               onDownload={handleDownload}
               onView={handleView}
+              onCancel={setCancelTarget}
               downloading={downloading}
+              cancellationWindowHours={cancellationWindowHours}
             />
           ))}
         </div>
@@ -389,6 +566,34 @@ export default function MyOrdersPage() {
       {!ordersLoading && totalPages > 1 && (
         <Pagination current={page} total={totalPages} onChange={setPage} />
       )}
+
+      <ResponsiveDialog
+        isOpen={!!cancelTarget}
+        onClose={() => setCancelTarget(null)}
+        title="Cancel this order?"
+        footer={
+          <div className="flex gap-3">
+            <button
+              onClick={() => setCancelTarget(null)}
+              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              Keep Order
+            </button>
+            <button
+              onClick={handleConfirmCancel}
+              disabled={cancelling}
+              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 transition-colors"
+            >
+              {cancelling ? "Cancelling…" : "Yes, Cancel"}
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-gray-500">
+          This can't be undone. If you've already paid, any applicable refund
+          will be processed after cancellation.
+        </p>
+      </ResponsiveDialog>
     </div>
   );
 }

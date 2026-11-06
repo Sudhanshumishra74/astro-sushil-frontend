@@ -27,6 +27,11 @@ const DEFAULT_TOP_BAR = {
 
 const TopBar = () => {
   const settings = useSettingStore((s) => s.settings);
+  const fetchSettings = useSettingStore((s) => s.fetchSettings);
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
 
   // Before settings load, fall back to the previous hardcoded strip so
   // there's no flash of nothing on first paint.
@@ -43,7 +48,7 @@ const TopBar = () => {
         }}
       />
       <p
-        className="text-center text-xs sm:text-sm md:text-xl font-body font-bold tracking-wide sm:whitespace-nowrap"
+        className="text-center text-xs sm:text-sm md:text-xl font-semibold tracking-wide leading-snug sm:whitespace-nowrap"
         style={{ color: topBar.textColor }}
       >
         <span
@@ -67,10 +72,7 @@ const TopBar = () => {
   const isExternal = /^https?:\/\//.test(topBar.linkUrl);
 
   return (
-    <div
-      style={{ backgroundColor: topBar.bgColor }}
-      className="overflow-hidden"
-    >
+    <div style={{ backgroundColor: topBar.bgColor }} className="overflow-hidden">
       {topBar.linkEnabled && topBar.linkUrl ? (
         isExternal ? (
           <a
@@ -88,107 +90,6 @@ const TopBar = () => {
         )
       ) : (
         <div className={baseClass}>{content}</div>
-      )}
-    </div>
-  );
-};
-
-const DEFAULT_HIGHLIGHTS_BAR = {
-  enabled: false,
-  text: "",
-  bgColor: "#121045",
-  textColor: "#ffffff",
-  linkEnabled: false,
-  linkUrl: "",
-};
-
-const MARQUEE_PX_PER_SEC = 35;
-
-const HighlightsBar = () => {
-  const settings = useSettingStore((s) => s.settings);
-  const highlightsBar = {
-    ...DEFAULT_HIGHLIGHTS_BAR,
-    ...settings?.highlightsBar,
-  };
-
-  const containerRef = useRef(null);
-  const textRef = useRef(null);
-  const [marquee, setMarquee] = useState({ on: false, duration: 15 });
-
-  useEffect(() => {
-    const measure = () => {
-      if (!containerRef.current || !textRef.current) return;
-      const textWidth = textRef.current.scrollWidth;
-      const overflowing = textWidth > containerRef.current.clientWidth;
-      setMarquee({
-        on: overflowing,
-        duration: Math.max(textWidth / MARQUEE_PX_PER_SEC, 6),
-      });
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [highlightsBar.text]);
-
-  if (!highlightsBar.enabled || !highlightsBar.text) return null;
-
-  const textClass =
-    "px-4 sm:px-6 text-xs sm:text-sm md:text-2xl font-body font-bold tracking-wide whitespace-nowrap";
-
-  const inner = marquee.on ? (
-    <div
-      className="flex w-max animate-marquee"
-      style={{ animationDuration: `${marquee.duration}s` }}
-    >
-      <span ref={textRef} className={textClass}>
-        {highlightsBar.text}
-      </span>
-      <span aria-hidden="true" className={textClass}>
-        {highlightsBar.text}
-      </span>
-    </div>
-  ) : (
-    <span ref={textRef} className={`${textClass} py-2`}>
-      {highlightsBar.text}
-    </span>
-  );
-
-  const baseClass = `w-full border-y border-gold flex items-center py-1 overflow-hidden ${
-    marquee.on ? "justify-start" : "justify-center"
-  }`;
-  const isExternal = /^https?:\/\//.test(highlightsBar.linkUrl);
-
-  return (
-    <div
-      style={{
-        backgroundColor: highlightsBar.bgColor,
-        color: highlightsBar.textColor,
-      }}
-    >
-      {highlightsBar.linkEnabled && highlightsBar.linkUrl ? (
-        isExternal ? (
-          <a
-            ref={containerRef}
-            href={highlightsBar.linkUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${baseClass} cursor-pointer hover:opacity-90 transition-opacity`}
-          >
-            {inner}
-          </a>
-        ) : (
-          <Link
-            ref={containerRef}
-            to={highlightsBar.linkUrl}
-            className={`${baseClass} cursor-pointer hover:opacity-90 transition-opacity`}
-          >
-            {inner}
-          </Link>
-        )
-      ) : (
-        <div ref={containerRef} className={baseClass}>
-          {inner}
-        </div>
       )}
     </div>
   );
@@ -279,7 +180,6 @@ const Navbar = () => {
   const setCurrency = useCurrencyStore((s) => s.setCurrency);
   const supportedCurrencies = useCurrencyStore((s) => s.supportedCurrencies);
   const fetchRates = useCurrencyStore((s) => s.fetchRates);
-  const fetchSettings = useSettingStore((s) => s.fetchSettings);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const [scrolled, setScrolled] = useState(false);
@@ -292,10 +192,6 @@ const Navbar = () => {
   useEffect(() => {
     if (token && !user) getProfile();
   }, [token, user, getProfile]);
-
-  useEffect(() => {
-    fetchSettings();
-  }, []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -475,8 +371,6 @@ const Navbar = () => {
           </div>
         </div>
       </header>
-
-      <HighlightsBar />
 
       {/* Mobile backdrop */}
       {menuOpen && (

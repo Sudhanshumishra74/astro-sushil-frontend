@@ -34,7 +34,10 @@ export const useWishlistStore = create((set, get) => ({
         { headers: get()._headers() },
       );
       set({ wishlist: res.data.data?.products || [] });
-      return res.data.inWishlist; 
+      // ApiResponse's 4th constructor arg lands under `meta`, not spread
+      // onto the response root — reading `res.data.inWishlist` was always
+      // undefined, so neither the "Added"/"Removed" toast ever fired.
+      return res.data.meta?.inWishlist;
     } catch (err) {
       console.error("toggleWishlist error:", err);
       return null;

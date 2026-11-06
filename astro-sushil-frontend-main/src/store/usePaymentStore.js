@@ -15,8 +15,7 @@ export const usePaymentStore = create((set, get) => {
 
     if (
       err.code === "ERR_NETWORK" ||
-      err.message?.includes("Network Error") ||
-      !err.response
+      err.message?.includes("Network Error") 
     ) {
       return "Network error";
     }
@@ -82,13 +81,13 @@ export const usePaymentStore = create((set, get) => {
       }
     },
 
-    createOrder: async ({ paymentMethod, addressId, currency = "INR", currencyRate = 1, }) => {
+    createOrder: async ({ paymentMethod, addressId, currency = "INR", currencyRate = 1, idempotencyKey }) => {
       try {
         set({ loading: true, error: null });
 
         const res = await axios.post(
           `${ORDER_URL}/create`,
-          { paymentMethod, addressId, currency , currencyRate },
+          { paymentMethod, addressId, currency, currencyRate, idempotencyKey },
           { headers: { Authorization: `Bearer ${getToken()}` } },
         );
 
@@ -128,17 +127,28 @@ export const usePaymentStore = create((set, get) => {
       userDetails,
       currency = "INR",
        currencyRate = 1,
+      idempotencyKey,
     }) => {
       try {
         set({ processingPayment: true, error: null });
 
-      
+
         if (paymentMethod === "cod") {
-          const result = await get().createOrder({ paymentMethod, addressId, currency, currencyRate });
+          const result = await get().createOrder({ paymentMethod, addressId, currency, currencyRate, idempotencyKey });
           set({ processingPayment: false });
           if (result.success) {
             useCartStore.getState().clearCart();
             toast.success("Order placed successfully!");
+
+            const codOrder = result.data?.order;
+            if (codOrder) {
+              trackPurchase({
+                orderId: codOrder._id,
+                amount: codOrder.totalAmount,
+                currency: codOrder.payment?.currency || currency,
+                productName: "Astro Sushil Order",
+              });
+            }
           }
           return result;
         }
@@ -151,6 +161,7 @@ export const usePaymentStore = create((set, get) => {
           addressId,
           currency,
           currencyRate,
+          idempotencyKey,
         });
 
         if (!orderResult.success) throw new Error(orderResult.error);
@@ -182,6 +193,7 @@ export const usePaymentStore = create((set, get) => {
                 trackPurchase({
                   orderId: order._id,
                   amount: razorpayConfig.amount / 100,
+                  currency: razorpayConfig.currency,
                   productName: "Astro Sushil Order",
                 });
                 resolve(verifyResult);
@@ -292,6 +304,125 @@ export const usePaymentStore = create((set, get) => {
         const msg = handleApiError(err, "Failed to download invoice");
         set({ error: msg });
 
+        return { success: false, error: msg };
+      } finally {
+        set({ loading: false });
+      }
+    },
+
+    // Mirrors downloadInvoice above — same blob-download pattern, just a
+    // different backend route. Only ever offered once a return reaches
+    // "refunded" (see OrderDetailPage.jsx), same gate the admin panel uses.
+    downloadCreditNote: async (orderId, returnId) => {
+      try {
+        const url = `${ORDER_URL}/${orderId}/returns/${returnId}/credit-note`;
+
+        const token = getToken();
+
+        set({ loading: true, error: null });
+
+        const response = await axios.get(url, {
+          responseType: "blob",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!response.headers["content-type"]?.includes("application/pdf")) {
+          const text = await response.data.text?.();
+
+          throw new Error("Invalid PDF response", text ? `: ${text}` : "");
+        }
+
+        if (!response.data || response.data.size < 1000) {
+          throw new Error("Corrupted PDF");
+        }
+
+        const blob = new Blob([response.data], { type: "application/pdf" });
+        const urlBlob = window.URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = urlBlob;
+        link.download = `credit-note-${returnId}.pdf`;
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        link.remove();
+        window.URL.revokeObjectURL(urlBlob);
+
+        return { success: true };
+      } catch (err) {
+        if (err.response) {
+          const errorData = err.response.data;
+          const msg =
+            typeof errorData === "string"
+              ? errorData
+              : errorData?.message || "Failed to download credit note";
+          set({ error: msg });
+          return { success: false, error: msg };
+        }
+
+        const msg = handleApiError(err, "Failed to download credit note");
+        set({ error: msg });
+
+        return { success: false, error: msg };
+      } finally {
+        set({ loading: false });
+      }
+    },
+
+    cancelOrder: async (orderId) => {
+      try {
+        set({ loading: true, error: null });
+
+        const token = getToken();
+        if (!token) {
+          set({ error: "Not authenticated", loading: false });
+          return { success: false, error: "Not authenticated" };
+        }
+
+        const res = await axios.patch(
+          `${ORDER_URL}/${orderId}/cancel`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+
+        const updated = res.data?.data;
+        set((state) => ({
+          order: state.order?._id === orderId ? updated : state.order,
+          orders: state.orders.map((o) => (o._id === orderId ? updated : o)),
+        }));
+
+        return { success: true, data: updated };
+      } catch (err) {
+        const msg = handleApiError(err, "Failed to cancel order");
+        set({ error: msg });
+        return { success: false, error: msg };
+      } finally {
+        set({ loading: false });
+      }
+    },
+
+    requestReturn: async (orderId, { items, reason, customerComment }) => {
+      try {
+        set({ loading: true, error: null });
+
+        const token = getToken();
+        if (!token) {
+          set({ error: "Not authenticated", loading: false });
+          return { success: false, error: "Not authenticated" };
+        }
+
+        const res = await axios.post(
+          `${ORDER_URL}/${orderId}/return`,
+          { items, reason, customerComment },
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+
+        return { success: true, data: res.data?.data };
+      } catch (err) {
+        const msg = handleApiError(err, "Failed to request return");
+        set({ error: msg });
         return { success: false, error: msg };
       } finally {
         set({ loading: false });

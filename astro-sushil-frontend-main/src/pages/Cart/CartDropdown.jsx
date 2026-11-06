@@ -2,6 +2,23 @@ import { Menu, X, User, ShoppingCart } from "lucide-react";
 import { useCartStore } from "../../store/useCartStore";
 import { Link } from "react-router-dom";
 import { useCurrency } from "../../hooks/useCurrency";
+
+// A product's variant/sub-variant selection — snapshotted onto the cart
+// item as name+value pairs (cart.controler.js's addToCart) specifically so
+// it's displayable here.
+function variantSelectionSummary(item) {
+  const parts = [
+    item.variantName ? `${item.variantName}: ${item.variantValue}` : null,
+    item.subVariantName ? `${item.subVariantName}: ${item.subVariantValue}` : null,
+    item.selectedRatti ? `${item.selectedRatti} ratti` : null,
+    item.certificateName
+      ? `${item.certificateName}${item.certificateIncludedInPrice ? "" : ` (+₹${item.certificatePrice})`}`
+      : null,
+  ].filter(Boolean);
+
+  return parts.length ? parts.join(" · ") : null;
+}
+
 export const CartDropdown = ({ onClose }) => {
   const { convert } = useCurrency();
 
@@ -11,14 +28,17 @@ export const CartDropdown = ({ onClose }) => {
   const { cart, removeFromCart, loading } = useCartStore();
   const items = cart?.items ?? [];
   const tax = cart?.tax ?? 0;
+  const discount = cart?.discount ?? 0;
   const subtotal =
     cart?.subTotal ?? items.reduce((s, i) => s + (i.total || 0), 0);
-  const shipping = cart?.shipping ?? (subtotal > 499 ? 0 : 49);
-  const total = cart?.totalAmount ?? subtotal + shipping;
+  // Shipping is deliberately not shown (or included in this total) here —
+  // no delivery address yet, so it's only ever a flat guess; the real,
+  // address-dependent charge only exists at checkout.
+  const total = subtotal + tax - discount;
 
   return (
     <div
-      className="absolute right-0 top-full mt-3 w-80 rounded-2xl flex flex-col max-h-180 overflow-hidden border border-black/8 z-50 bg-white animate-dropdown"
+      className="absolute right-0 top-full mt-3 w-80 rounded-2xl flex flex-col max-h-120 overflow-hidden border border-black/8 z-50 bg-white animate-dropdown"
       style={{
         boxShadow: "0 20px 60px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.06)",
       }}
@@ -56,7 +76,7 @@ export const CartDropdown = ({ onClose }) => {
         ) : (
           items.map((item) => (
             <div
-              key={`${item.product}-${item.variantId}`}
+              key={item._id || `${item.product}-${item.variantId}`}
               className="flex gap-3 items-center p-2.5 rounded-xl bg-white border border-black/8 hover:border-primary/20 hover:shadow-sm transition-all duration-150"
             >
               {/* Thumbnail */}
@@ -84,7 +104,13 @@ export const CartDropdown = ({ onClose }) => {
                 </p>
                 <p className="text-[11px] font-body text-black/40 mt-0.5">
                   Qty: {item.quantity}
+                  {item.taxRate > 0 && ` · GST ${item.taxRate}%`}
                 </p>
+                {variantSelectionSummary(item) && (
+                  <p className="text-[10px] font-body text-primary/70 mt-0.5 line-clamp-1">
+                    {variantSelectionSummary(item)}
+                  </p>
+                )}
                 <p className="text-xs font-body font-bold text-primary mt-0.5">
                   {formatPrice(item.total ?? item.price * item.quantity)}
                 </p>
@@ -92,7 +118,9 @@ export const CartDropdown = ({ onClose }) => {
 
               {/* Remove */}
               <button
-                onClick={() => removeFromCart(item.product, item.variantId)}
+                onClick={() =>
+                  removeFromCart(item.product, item.variantId, item._id)
+                }
                 className="p-1.5 rounded-lg text-black/20 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
               >
                 <X size={12} />
@@ -112,14 +140,16 @@ export const CartDropdown = ({ onClose }) => {
                 {formatPrice(subtotal)}
               </span>
             </div>
-            <div className="flex justify-between text-xs font-body">
-              <span className="text-black/40">Shipping</span>
-              <span
-                className={`font-semibold ${shipping === 0 ? "text-green-600" : "text-primary"}`}
-              >
-                {shipping === 0 ? "Free" : `₹${shipping}`}
-              </span>
-            </div>
+            {discount > 0 && (
+              <div className="flex justify-between text-xs font-body">
+                <span className="text-black/40">
+                  Discount{cart?.couponCode ? ` (${cart.couponCode})` : ""}
+                </span>
+                <span className="font-semibold text-green-600">
+                  −{formatPrice(discount)}
+                </span>
+              </div>
+            )}
              {tax > 0 && (
     <div className="flex justify-between text-xs font-body">
       <span className="text-black/40">GST</span>

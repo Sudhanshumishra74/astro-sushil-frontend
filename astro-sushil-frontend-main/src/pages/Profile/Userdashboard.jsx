@@ -13,6 +13,8 @@ import {
   LogOut,
   Menu,
   X,
+  MapPin,
+  Sparkles,
 } from "lucide-react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../store/useAuthStore";
@@ -21,8 +23,10 @@ import MyOrdersPage from "./MyOrders";
 import MyProfile from "./Profile";
 import DownloadsSection from "./Downloadssection";
 import MyReportsSection from "./Myreportssection";
+import AddressesSection from "./AddressesSection";
 import Seo from "../../components/Seo";
 import WishlistPage from "./Wishlistpage";
+import MyRecommendationsPage from "./MyRecommendationsPage";
 import LogoutConfirm from "@/utils/LogoutConfirm";
 import PageHero from "@/components/HeroPage";
 
@@ -35,8 +39,10 @@ const NAV_ITEMS = [
     path: "/consultations",
   },
   { label: "My Reports", icon: FileText, path: "/reports" },
+  { label: "Recommendations", icon: Sparkles, path: "/recommendations" },
   { label: "Wishlist", icon: Heart, path: "/wishlist" },
   { label: "Downloads", icon: Download, path: "/downloads" },
+  { label: "Addresses", icon: MapPin, path: "/addresses" },
 ];
 
 const TAB_QUERY_MAP = {
@@ -46,7 +52,9 @@ const TAB_QUERY_MAP = {
   reports: "/reports",
   wishlist: "/wishlist",
   consultations: "/consultations",
+  recommendations: "/recommendations",
   downloads: "/downloads",
+  addresses: "/addresses",
 };
 
 const PATH_TO_TAB = Object.fromEntries(
@@ -151,8 +159,12 @@ export default function UserDashboard() {
         return <WishlistPage />;
       case "/consultations":
         return <MyConsultationsPage />;
+      case "/recommendations":
+        return <MyRecommendationsPage />;
       case "/downloads":
         return <DownloadsSection />;
+      case "/addresses":
+        return <AddressesSection />;
       default:
         return <MyProfile />;
     }

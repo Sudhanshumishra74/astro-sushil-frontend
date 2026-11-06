@@ -201,7 +201,7 @@ export default function Shop() {
                 className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5  gap-5 sm:gap-6"
               >
                 {paginated.map((product, i) => {
-              const { sale, mrp, usd, mrpUsd } = getPrice(product);
+              const { sale, mrp } = getPrice(product);
                   return (
                     <motion.div
                       key={product._id}
@@ -220,13 +220,13 @@ export default function Shop() {
                         originalPrice={fmt(mrp)}
                         salePrice={fmt(sale)}
                         gstType={product.gst?.type}
-                         usdPrice={usd}
-                          mrpUsdPrice={mrpUsd}
                         type={product.type}
                         rating={product.rating}
                         reviewsCount={product.reviewsCount}
                         hasVariants={product.hasVariants}
+                        soldByRatti={product.soldByRatti}
                         variants={product.variants ?? []}
+                        stock={product.stock}
                         onBook={() => navigate(`/product/${product.slug}`)}
                       />
                     </motion.div>
